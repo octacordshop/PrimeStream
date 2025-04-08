@@ -1,12 +1,15 @@
-import {
-  users, type User, type InsertUser,
-  movies, type Movie, type InsertMovie,
-  tvShows, type TVShow, type InsertTVShow,
-  episodes, type Episode, type InsertEpisode,
-  watchlist, type Watchlist, type InsertWatchlist,
-  recentlyWatched, type RecentlyWatched, type InsertRecentlyWatched,
-  apiCache, type ApiCache, type InsertApiCache
-} from "@shared/schema";
+import { eq, and, like, desc, sql } from 'drizzle-orm';
+import { db } from './db';
+import { 
+  users, movies, tvShows, episodes, watchlist, recentlyWatched, apiCache,
+  type User, type InsertUser,
+  type Movie, type InsertMovie,
+  type TVShow, type InsertTVShow,
+  type Episode, type InsertEpisode,
+  type Watchlist, type InsertWatchlist,
+  type RecentlyWatched, type InsertRecentlyWatched,
+  type ApiCache, type InsertApiCache
+} from '@shared/schema';
 
 export interface IStorage {
   // User operations
@@ -58,380 +61,346 @@ export interface IStorage {
   searchContent(query: string, limit?: number): Promise<(Movie | TVShow)[]>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private movies: Map<number, Movie>;
-  private tvShows: Map<number, TVShow>;
-  private episodes: Map<number, Episode>;
-  private watchlists: Map<number, Watchlist>;
-  private recentlyWatched: Map<number, RecentlyWatched>;
-  private apiCaches: Map<string, ApiCache>;
-  private currentUserIds: number;
-  private currentMovieIds: number;
-  private currentTVShowIds: number;
-  private currentEpisodeIds: number;
-  private currentWatchlistIds: number;
-  private currentRecentlyWatchedIds: number;
-  private currentApiCacheIds: number;
-
-  constructor() {
-    this.users = new Map();
-    this.movies = new Map();
-    this.tvShows = new Map();
-    this.episodes = new Map();
-    this.watchlists = new Map();
-    this.recentlyWatched = new Map();
-    this.apiCaches = new Map();
-    this.currentUserIds = 1;
-    this.currentMovieIds = 1;
-    this.currentTVShowIds = 1;
-    this.currentEpisodeIds = 1;
-    this.currentWatchlistIds = 1;
-    this.currentRecentlyWatchedIds = 1;
-    this.currentApiCacheIds = 1;
-  }
-
+export class DatabaseStorage implements IStorage {
   // User operations
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username
-    );
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentUserIds++;
-    const now = new Date();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values(insertUser).returning();
     return user;
   }
 
   // Movie operations
   async getMovies(limit = 50, offset = 0): Promise<Movie[]> {
-    return Array.from(this.movies.values())
-      .filter(movie => movie.isVisible)
-      .sort((a, b) => b.id - a.id)
-      .slice(offset, offset + limit);
+    return db.select()
+      .from(movies)
+      .where(eq(movies.isVisible, true))
+      .orderBy(desc(movies.lastUpdated))
+      .limit(limit)
+      .offset(offset);
   }
 
   async getMovie(id: number): Promise<Movie | undefined> {
-    return this.movies.get(id);
+    const [movie] = await db.select()
+      .from(movies)
+      .where(eq(movies.id, id));
+    return movie;
   }
 
   async getMovieByImdbId(imdbId: string): Promise<Movie | undefined> {
-    return Array.from(this.movies.values()).find(
-      (movie) => movie.imdbId === imdbId
-    );
+    const [movie] = await db.select()
+      .from(movies)
+      .where(eq(movies.imdbId, imdbId));
+    return movie;
   }
 
   async createMovie(movie: InsertMovie): Promise<Movie> {
-    const id = this.currentMovieIds++;
-    const now = new Date();
-    const newMovie: Movie = {
-      ...movie,
-      id,
-      createdAt: now,
-      lastUpdated: now
-    };
-    this.movies.set(id, newMovie);
+    const [newMovie] = await db.insert(movies)
+      .values({
+        ...movie,
+        createdAt: new Date(),
+        lastUpdated: new Date()
+      })
+      .returning();
     return newMovie;
   }
 
   async updateMovie(id: number, movie: Partial<InsertMovie>): Promise<Movie | undefined> {
-    const existingMovie = this.movies.get(id);
-    if (!existingMovie) return undefined;
-
-    const updatedMovie: Movie = {
-      ...existingMovie,
-      ...movie,
-      lastUpdated: new Date()
-    };
-    this.movies.set(id, updatedMovie);
+    const [updatedMovie] = await db.update(movies)
+      .set({
+        ...movie,
+        lastUpdated: new Date()
+      })
+      .where(eq(movies.id, id))
+      .returning();
     return updatedMovie;
   }
 
   async deleteMovie(id: number): Promise<boolean> {
-    return this.movies.delete(id);
+    await db.delete(movies)
+      .where(eq(movies.id, id));
+    return true;
   }
 
   async getFeaturedMovies(limit = 10): Promise<Movie[]> {
-    return Array.from(this.movies.values())
-      .filter(movie => movie.isVisible && movie.isFeatured)
-      .sort((a, b) => b.id - a.id)
-      .slice(0, limit);
+    return db.select()
+      .from(movies)
+      .where(and(
+        eq(movies.isVisible, true),
+        eq(movies.isFeatured, true)
+      ))
+      .limit(limit);
   }
 
   // TV Show operations
   async getTVShows(limit = 50, offset = 0): Promise<TVShow[]> {
-    return Array.from(this.tvShows.values())
-      .filter(show => show.isVisible)
-      .sort((a, b) => b.id - a.id)
-      .slice(offset, offset + limit);
+    return db.select()
+      .from(tvShows)
+      .where(eq(tvShows.isVisible, true))
+      .orderBy(desc(tvShows.lastUpdated))
+      .limit(limit)
+      .offset(offset);
   }
 
   async getTVShow(id: number): Promise<TVShow | undefined> {
-    return this.tvShows.get(id);
+    const [tvShow] = await db.select()
+      .from(tvShows)
+      .where(eq(tvShows.id, id));
+    return tvShow;
   }
 
   async getTVShowByImdbId(imdbId: string): Promise<TVShow | undefined> {
-    return Array.from(this.tvShows.values()).find(
-      (show) => show.imdbId === imdbId
-    );
+    const [tvShow] = await db.select()
+      .from(tvShows)
+      .where(eq(tvShows.imdbId, imdbId));
+    return tvShow;
   }
 
   async createTVShow(tvShow: InsertTVShow): Promise<TVShow> {
-    const id = this.currentTVShowIds++;
-    const now = new Date();
-    const newTVShow: TVShow = {
-      ...tvShow,
-      id,
-      createdAt: now,
-      lastUpdated: now
-    };
-    this.tvShows.set(id, newTVShow);
+    const [newTVShow] = await db.insert(tvShows)
+      .values({
+        ...tvShow,
+        createdAt: new Date(),
+        lastUpdated: new Date()
+      })
+      .returning();
     return newTVShow;
   }
 
   async updateTVShow(id: number, tvShow: Partial<InsertTVShow>): Promise<TVShow | undefined> {
-    const existingTVShow = this.tvShows.get(id);
-    if (!existingTVShow) return undefined;
-
-    const updatedTVShow: TVShow = {
-      ...existingTVShow,
-      ...tvShow,
-      lastUpdated: new Date()
-    };
-    this.tvShows.set(id, updatedTVShow);
+    const [updatedTVShow] = await db.update(tvShows)
+      .set({
+        ...tvShow,
+        lastUpdated: new Date()
+      })
+      .where(eq(tvShows.id, id))
+      .returning();
     return updatedTVShow;
   }
 
   async deleteTVShow(id: number): Promise<boolean> {
-    return this.tvShows.delete(id);
+    await db.delete(tvShows)
+      .where(eq(tvShows.id, id));
+    return true;
   }
 
   async getFeaturedTVShows(limit = 10): Promise<TVShow[]> {
-    return Array.from(this.tvShows.values())
-      .filter(show => show.isVisible && show.isFeatured)
-      .sort((a, b) => b.id - a.id)
-      .slice(0, limit);
+    return db.select()
+      .from(tvShows)
+      .where(and(
+        eq(tvShows.isVisible, true),
+        eq(tvShows.isFeatured, true)
+      ))
+      .limit(limit);
   }
 
   // Episode operations
   async getEpisodes(tvShowId: number, season?: number): Promise<Episode[]> {
-    return Array.from(this.episodes.values())
-      .filter(episode => 
-        episode.tvShowId === tvShowId && 
-        (season ? episode.season === season : true)
-      )
-      .sort((a, b) => {
-        if (a.season === b.season) {
-          return a.episode - b.episode;
-        }
-        return a.season - b.season;
-      });
+    if (season !== undefined) {
+      return db.select()
+        .from(episodes)
+        .where(and(
+          eq(episodes.tvShowId, tvShowId),
+          eq(episodes.season, season)
+        ))
+        .orderBy(episodes.season, episodes.episode);
+    }
+    
+    return db.select()
+      .from(episodes)
+      .where(eq(episodes.tvShowId, tvShowId))
+      .orderBy(episodes.season, episodes.episode);
   }
 
   async getEpisode(id: number): Promise<Episode | undefined> {
-    return this.episodes.get(id);
+    const [episode] = await db.select()
+      .from(episodes)
+      .where(eq(episodes.id, id));
+    return episode;
   }
 
   async createEpisode(episode: InsertEpisode): Promise<Episode> {
-    const id = this.currentEpisodeIds++;
-    const now = new Date();
-    const newEpisode: Episode = {
-      ...episode,
-      id,
-      createdAt: now
-    };
-    this.episodes.set(id, newEpisode);
+    const [newEpisode] = await db.insert(episodes)
+      .values({
+        ...episode,
+        createdAt: new Date()
+      })
+      .returning();
     return newEpisode;
   }
 
   async updateEpisode(id: number, episode: Partial<InsertEpisode>): Promise<Episode | undefined> {
-    const existingEpisode = this.episodes.get(id);
-    if (!existingEpisode) return undefined;
-
-    const updatedEpisode: Episode = {
-      ...existingEpisode,
-      ...episode
-    };
-    this.episodes.set(id, updatedEpisode);
+    const [updatedEpisode] = await db.update(episodes)
+      .set(episode)
+      .where(eq(episodes.id, id))
+      .returning();
     return updatedEpisode;
   }
 
   async deleteEpisode(id: number): Promise<boolean> {
-    return this.episodes.delete(id);
+    await db.delete(episodes)
+      .where(eq(episodes.id, id));
+    return true;
   }
 
   // Watchlist operations
   async getWatchlist(userId: number): Promise<Watchlist[]> {
-    return Array.from(this.watchlists.values())
-      .filter(item => item.userId === userId)
-      .sort((a, b) => new Date(b.addedAt).getTime() - new Date(a.addedAt).getTime());
+    return db.select()
+      .from(watchlist)
+      .where(eq(watchlist.userId, userId))
+      .orderBy(desc(watchlist.addedAt));
   }
 
   async addToWatchlist(item: InsertWatchlist): Promise<Watchlist> {
-    const id = this.currentWatchlistIds++;
-    const now = new Date();
-    const newItem: Watchlist = {
-      ...item,
-      id,
-      addedAt: now
-    };
-    this.watchlists.set(id, newItem);
+    const [newItem] = await db.insert(watchlist)
+      .values({
+        ...item,
+        addedAt: new Date()
+      })
+      .returning();
     return newItem;
   }
 
   async removeFromWatchlist(id: number): Promise<boolean> {
-    return this.watchlists.delete(id);
+    await db.delete(watchlist)
+      .where(eq(watchlist.id, id));
+    return true;
   }
 
   async isInWatchlist(userId: number, mediaType: string, mediaId: number): Promise<boolean> {
-    return Array.from(this.watchlists.values())
-      .some(item => 
-        item.userId === userId && 
-        item.mediaType === mediaType && 
-        item.mediaId === mediaId
-      );
+    const items = await db.select({ id: watchlist.id })
+      .from(watchlist)
+      .where(and(
+        eq(watchlist.userId, userId),
+        eq(watchlist.mediaType, mediaType),
+        eq(watchlist.mediaId, mediaId)
+      ));
+    return items.length > 0;
   }
 
   // Recently watched operations
   async getRecentlyWatched(userId: number, limit = 20): Promise<RecentlyWatched[]> {
-    return Array.from(this.recentlyWatched.values())
-      .filter(item => item.userId === userId)
-      .sort((a, b) => new Date(b.watchedAt).getTime() - new Date(a.watchedAt).getTime())
-      .slice(0, limit);
+    return db.select()
+      .from(recentlyWatched)
+      .where(eq(recentlyWatched.userId, userId))
+      .orderBy(desc(recentlyWatched.watchedAt))
+      .limit(limit);
   }
 
   async addToRecentlyWatched(item: InsertRecentlyWatched): Promise<RecentlyWatched> {
-    // Check if this media is already in recently watched
-    const existing = Array.from(this.recentlyWatched.values()).find(
-      watch => 
-        watch.userId === item.userId && 
-        watch.mediaType === item.mediaType && 
-        watch.mediaId === item.mediaId &&
-        watch.episodeId === item.episodeId
-    );
-
+    // Check if an entry already exists
+    const [existing] = await db.select()
+      .from(recentlyWatched)
+      .where(and(
+        eq(recentlyWatched.userId, item.userId),
+        eq(recentlyWatched.mediaType, item.mediaType),
+        eq(recentlyWatched.mediaId, item.mediaId),
+        item.episodeId 
+          ? eq(recentlyWatched.episodeId, item.episodeId) 
+          : sql`${recentlyWatched.episodeId} IS NULL`
+      ));
+    
     if (existing) {
-      // Update the watched time and progress instead of creating a new entry
-      const updated: RecentlyWatched = {
-        ...existing,
-        watchedAt: new Date(),
-        progress: item.progress || existing.progress
-      };
-      this.recentlyWatched.set(existing.id, updated);
+      // Update existing entry
+      const [updated] = await db.update(recentlyWatched)
+        .set({
+          progress: item.progress,
+          watchedAt: new Date()
+        })
+        .where(eq(recentlyWatched.id, existing.id))
+        .returning();
       return updated;
     }
-
-    const id = this.currentRecentlyWatchedIds++;
-    const now = new Date();
-    const newItem: RecentlyWatched = {
-      ...item,
-      id,
-      watchedAt: now
-    };
-    this.recentlyWatched.set(id, newItem);
+    
+    // Create new entry
+    const [newItem] = await db.insert(recentlyWatched)
+      .values({
+        ...item,
+        watchedAt: new Date()
+      })
+      .returning();
     return newItem;
   }
 
   async updateProgress(id: number, progress: number): Promise<RecentlyWatched | undefined> {
-    const existing = this.recentlyWatched.get(id);
-    if (!existing) return undefined;
-
-    const updated: RecentlyWatched = {
-      ...existing,
-      progress,
-      watchedAt: new Date() // Update the watched time as well
-    };
-    this.recentlyWatched.set(id, updated);
+    const [updated] = await db.update(recentlyWatched)
+      .set({
+        progress,
+        watchedAt: new Date()
+      })
+      .where(eq(recentlyWatched.id, id))
+      .returning();
     return updated;
   }
 
   // API Cache operations
   async getCachedData(endpoint: string): Promise<ApiCache | undefined> {
-    return this.apiCaches.get(endpoint);
+    const [cache] = await db.select()
+      .from(apiCache)
+      .where(eq(apiCache.endpoint, endpoint));
+    return cache;
   }
 
   async setCachedData(cache: InsertApiCache): Promise<ApiCache> {
-    const existingCacheByEndpoint = Array.from(this.apiCaches.values()).find(
-      entry => entry.endpoint === cache.endpoint
-    );
-
-    if (existingCacheByEndpoint) {
+    // Check if cache exists
+    const [existing] = await db.select()
+      .from(apiCache)
+      .where(eq(apiCache.endpoint, cache.endpoint));
+    
+    if (existing) {
       // Update existing cache
-      const updated: ApiCache = {
-        ...existingCacheByEndpoint,
-        data: cache.data,
-        lastUpdated: new Date()
-      };
-      this.apiCaches.set(cache.endpoint, updated);
+      const [updated] = await db.update(apiCache)
+        .set({
+          data: cache.data,
+          lastUpdated: new Date()
+        })
+        .where(eq(apiCache.id, existing.id))
+        .returning();
       return updated;
     }
-
+    
     // Create new cache
-    const id = this.currentApiCacheIds++;
-    const now = new Date();
-    const newCache: ApiCache = {
-      ...cache,
-      id,
-      lastUpdated: now
-    };
-    this.apiCaches.set(cache.endpoint, newCache);
+    const [newCache] = await db.insert(apiCache)
+      .values({
+        ...cache,
+        lastUpdated: new Date()
+      })
+      .returning();
     return newCache;
   }
 
   // Search operations
   async searchContent(query: string, limit = 20): Promise<(Movie | TVShow)[]> {
-    const searchTermLower = query.toLowerCase();
+    // Search in movies
+    const movieResults = await db.select()
+      .from(movies)
+      .where(and(
+        eq(movies.isVisible, true),
+        like(movies.title, `%${query}%`)
+      ))
+      .limit(limit);
     
-    const matchedMovies = Array.from(this.movies.values())
-      .filter(movie => 
-        movie.isVisible && 
-        (movie.title.toLowerCase().includes(searchTermLower) ||
-         (movie.plot && movie.plot.toLowerCase().includes(searchTermLower)) ||
-         (movie.actors && movie.actors.toLowerCase().includes(searchTermLower)) ||
-         (movie.director && movie.director.toLowerCase().includes(searchTermLower)))
-      );
+    // Search in TV shows
+    const tvResults = await db.select()
+      .from(tvShows)
+      .where(and(
+        eq(tvShows.isVisible, true),
+        like(tvShows.title, `%${query}%`)
+      ))
+      .limit(limit);
     
-    const matchedShows = Array.from(this.tvShows.values())
-      .filter(show => 
-        show.isVisible && 
-        (show.title.toLowerCase().includes(searchTermLower) ||
-         (show.plot && show.plot.toLowerCase().includes(searchTermLower)) ||
-         (show.actors && show.actors.toLowerCase().includes(searchTermLower)) ||
-         (show.creator && show.creator.toLowerCase().includes(searchTermLower)))
-      );
-    
-    // Combine and sort the results by relevance (title match first, then others)
-    const combinedResults = [...matchedMovies, ...matchedShows]
-      .sort((a, b) => {
-        const aTitle = a.title.toLowerCase();
-        const bTitle = b.title.toLowerCase();
-        
-        // Exact title matches first
-        if (aTitle === searchTermLower && bTitle !== searchTermLower) return -1;
-        if (bTitle === searchTermLower && aTitle !== searchTermLower) return 1;
-        
-        // Title starts with query next
-        if (aTitle.startsWith(searchTermLower) && !bTitle.startsWith(searchTermLower)) return -1;
-        if (bTitle.startsWith(searchTermLower) && !aTitle.startsWith(searchTermLower)) return 1;
-        
-        // Then sort by title contains query
-        if (aTitle.includes(searchTermLower) && !bTitle.includes(searchTermLower)) return -1;
-        if (bTitle.includes(searchTermLower) && !aTitle.includes(searchTermLower)) return 1;
-        
-        // Finally sort alphabetically
-        return aTitle.localeCompare(bTitle);
-      })
-      .slice(0, limit);
-    
-    return combinedResults;
+    // Combine results
+    return [...movieResults, ...tvResults].slice(0, limit);
   }
 }
 
-export const storage = new MemStorage();
+// Export a singleton instance of the storage class
+export const storage = new DatabaseStorage();

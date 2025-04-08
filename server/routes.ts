@@ -662,5 +662,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Fetch and store latest episodes from Vidsrc
+  app.post("/api/admin/fetch/episodes", async (req, res) => {
+    try {
+      const page = req.query.page || 1;
+      const endpoint = `https://vidsrc.xyz/episodes/latest/page-${page}.json`;
+      
+      let episodesData;
+      
+      // Check for cached data first
+      const cachedData = await storage.getCachedData(endpoint);
+      if (cachedData && (new Date().getTime() - new Date(cachedData.lastUpdated).getTime() < 3600000)) {
+        // If cache is less than 1 hour old, use it
+        episodesData = safeJsonParse(cachedData.data);
+      } else {
+        // Otherwise, fetch from API
+        const response = await axios.get(endpoint);
+        episodesData = response.data;
+        
+        // Store in cache
+        await storage.setCachedData({
+          endpoint,
+          data: JSON.stringify(episodesData)
+        });
+      }
+      
+      // Process and store episodes
+      const results = [];
+      
+      if (Array.isArray(episodesData)) {
+        for (const episodeData of episodesData) {
+          // First, check if we have the TV show
+          const tvShow = await storage.getTVShowByImdbId(episodeData.show_imdb_id);
+          
+          if (!tvShow) {
+            // Skip episodes for shows we don't have
+            results.push({ 
+              episode: episodeData, 
+              status: 'skipped', 
+              reason: 'TV show not found' 
+            });
+            continue;
+          }
+          
+          // Check if this episode already exists
+          const existingEpisodes = await storage.getEpisodes(tvShow.id, episodeData.season);
+          const existingEpisode = existingEpisodes.find(
+            e => e.season === episodeData.season && e.episode === episodeData.episode
+          );
+          
+          if (existingEpisode) {
+            // Update existing episode
+            const updatedEpisode = await storage.updateEpisode(existingEpisode.id, {
+              title: episodeData.title,
+              plot: episodeData.plot,
+              poster: episodeData.poster,
+              runtime: episodeData.runtime,
+              airDate: episodeData.air_date,
+              imdbId: episodeData.imdb_id
+            });
+            
+            results.push({ episode: updatedEpisode, status: 'updated' });
+          } else {
+            // Create new episode
+            const newEpisode = await storage.createEpisode({
+              tvShowId: tvShow.id,
+              season: episodeData.season,
+              episode: episodeData.episode,
+              title: episodeData.title,
+              plot: episodeData.plot || null,
+              poster: episodeData.poster || null,
+              runtime: episodeData.runtime || null,
+              airDate: episodeData.air_date || null,
+              imdbId: episodeData.imdb_id || null
+            });
+            
+            results.push({ episode: newEpisode, status: 'created' });
+          }
+        }
+      }
+      
+      res.json({
+        fetched: episodesData?.length || 0,
+        processed: results.length,
+        results
+      });
+    } catch (error) {
+      console.error("Error fetching and storing episodes:", error);
+      res.status(500).json({ message: "Failed to fetch and store episodes", error: error.message });
+    }
+  });
+
+  // Refresh all content from Vidsrc (movies, TV shows, episodes)
+  app.post("/api/admin/refresh-content", async (req, res) => {
+    try {
+      const pagesToFetch = req.query.pages ? parseInt(req.query.pages as string) : 1;
+      
+      // Import the refreshContentDatabase function from vidsrc-api.ts
+      const { refreshContentDatabase } = await import('./vidsrc-api');
+      
+      // Call the function to refresh content
+      const results = await refreshContentDatabase(pagesToFetch);
+      
+      // Return the results
+      res.json({
+        success: true,
+        message: "Content refreshed successfully",
+        results
+      });
+    } catch (error) {
+      console.error("Error refreshing content:", error);
+      res.status(500).json({ message: "Failed to refresh content", error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
   return httpServer;
 }
