@@ -21,6 +21,7 @@ export interface IStorage {
   getMovies(limit?: number, offset?: number): Promise<Movie[]>;
   getMovie(id: number): Promise<Movie | undefined>;
   getMovieByImdbId(imdbId: string): Promise<Movie | undefined>;
+  getMovieByTmdbId(tmdbId: string): Promise<Movie | undefined>;
   createMovie(movie: InsertMovie): Promise<Movie>;
   updateMovie(id: number, movie: Partial<InsertMovie>): Promise<Movie | undefined>;
   deleteMovie(id: number): Promise<boolean>;
@@ -30,6 +31,7 @@ export interface IStorage {
   getTVShows(limit?: number, offset?: number): Promise<TVShow[]>;
   getTVShow(id: number): Promise<TVShow | undefined>;
   getTVShowByImdbId(imdbId: string): Promise<TVShow | undefined>;
+  getTVShowByTmdbId(tmdbId: string): Promise<TVShow | undefined>;
   createTVShow(tvShow: InsertTVShow): Promise<TVShow>;
   updateTVShow(id: number, tvShow: Partial<InsertTVShow>): Promise<TVShow | undefined>;
   deleteTVShow(id: number): Promise<boolean>;
@@ -101,6 +103,13 @@ export class DatabaseStorage implements IStorage {
       .where(eq(movies.imdbId, imdbId));
     return movie;
   }
+  
+  async getMovieByTmdbId(tmdbId: string): Promise<Movie | undefined> {
+    const [movie] = await db.select()
+      .from(movies)
+      .where(eq(movies.tmdbId, tmdbId));
+    return movie;
+  }
 
   async createMovie(movie: InsertMovie): Promise<Movie> {
     const [newMovie] = await db.insert(movies)
@@ -161,6 +170,13 @@ export class DatabaseStorage implements IStorage {
     const [tvShow] = await db.select()
       .from(tvShows)
       .where(eq(tvShows.imdbId, imdbId));
+    return tvShow;
+  }
+  
+  async getTVShowByTmdbId(tmdbId: string): Promise<TVShow | undefined> {
+    const [tvShow] = await db.select()
+      .from(tvShows)
+      .where(eq(tvShows.tmdbId, tmdbId));
     return tvShow;
   }
 
