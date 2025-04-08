@@ -200,10 +200,10 @@ export default function VideoPlayer({
         frameBorder="0"
       />
       
-      {/* Subtitle selector outside the video frame */}
-      <div className="mt-4 flex justify-end">
+      {/* Subtitle selector */}
+      <div className="absolute bottom-4 right-4 z-10">
         <Select value={selectedSubtitle} onValueChange={handleSubtitleChange}>
-          <SelectTrigger className="w-[180px] bg-prime-dark-light text-white">
+          <SelectTrigger className="w-[180px] bg-black/70 text-white border-none">
             <Settings size={16} className="mr-2" />
             <SelectValue placeholder="Subtitles" />
           </SelectTrigger>

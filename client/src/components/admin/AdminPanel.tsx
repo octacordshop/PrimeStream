@@ -32,6 +32,17 @@ const AdminPanel = ({ onClose }: AdminPanelProps) => {
   const [tmdbYear, setTmdbYear] = useState(new Date().getFullYear().toString());
   const [tmdbContentType, setTmdbContentType] = useState('movie');
   const [tmdbPage, setTmdbPage] = useState('1');
+  const [tmdbYearRange, setTmdbYearRange] = useState({ 
+    start: (new Date().getFullYear() - 5).toString(), 
+    end: new Date().getFullYear().toString() 
+  });
+  const [bulkImportProgress, setBulkImportProgress] = useState({ 
+    isImporting: false, 
+    currentYear: 0,
+    totalYears: 0,
+    processedCount: 0,
+    errorCount: 0
+  });
   const { toast } = useToast();
   
   // Get content based on type
@@ -122,6 +133,119 @@ const AdminPanel = ({ onClose }: AdminPanelProps) => {
       year, 
       page 
     });
+  };
+  
+  // Handle bulk import from TMDB
+  const handleBulkImport = async () => {
+    const startYear = parseInt(tmdbYearRange.start);
+    const endYear = parseInt(tmdbYearRange.end);
+    
+    // Validate years
+    if (isNaN(startYear) || startYear < 1900 || startYear > new Date().getFullYear()) {
+      toast({
+        title: "Invalid Start Year",
+        description: "Please enter a valid start year between 1900 and the current year.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (isNaN(endYear) || endYear < 1900 || endYear > new Date().getFullYear()) {
+      toast({
+        title: "Invalid End Year",
+        description: "Please enter a valid end year between 1900 and the current year.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (startYear > endYear) {
+      toast({
+        title: "Invalid Year Range",
+        description: "Start year must be less than or equal to end year.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Calculate the total number of years to process
+    const totalYears = endYear - startYear + 1;
+    
+    // Ask for confirmation if the range is large
+    if (totalYears > 5) {
+      const confirmed = window.confirm(
+        `You are about to import content from ${totalYears} years (${startYear}-${endYear}). This operation may take a while and put load on the system. Do you want to continue?`
+      );
+      
+      if (!confirmed) {
+        return;
+      }
+    }
+    
+    // Initialize progress
+    setBulkImportProgress({
+      isImporting: true,
+      currentYear: startYear,
+      totalYears: totalYears,
+      processedCount: 0,
+      errorCount: 0
+    });
+    
+    // Process each year
+    for (let year = startYear; year <= endYear; year++) {
+      try {
+        setBulkImportProgress(prev => ({
+          ...prev,
+          currentYear: year
+        }));
+        
+        // Fetch page 1 for the current year
+        const response = await fetchTmdbContentMutation.mutateAsync({
+          type: tmdbContentType,
+          year,
+          page: 1
+        });
+        
+        const data = await response.json();
+        
+        setBulkImportProgress(prev => ({
+          ...prev,
+          processedCount: prev.processedCount + (data.processed || 0)
+        }));
+        
+        // Small delay to avoid overwhelming the API
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } catch (error) {
+        console.error(`Error importing content for year ${year}:`, error);
+        
+        setBulkImportProgress(prev => ({
+          ...prev,
+          errorCount: prev.errorCount + 1
+        }));
+        
+        // Longer delay on error to respect rate limits
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    }
+    
+    // Complete the bulk import
+    setBulkImportProgress(prev => ({
+      ...prev,
+      isImporting: false
+    }));
+    
+    // Show success message
+    toast({
+      title: "Bulk Import Completed",
+      description: `Successfully imported ${bulkImportProgress.processedCount} items from ${startYear} to ${endYear}.`,
+    });
+    
+    // Invalidate relevant queries
+    if (tmdbContentType === 'movie') {
+      queryClient.invalidateQueries({ queryKey: ['/api/movies/latest'] });
+    } else {
+      queryClient.invalidateQueries({ queryKey: ['/api/tvshows/latest'] });
+    }
   };
   
   // Fetch latest content mutation (from Vidsrc)
@@ -629,7 +753,7 @@ const AdminPanel = ({ onClose }: AdminPanelProps) => {
                   <Button 
                     className="bg-prime-blue hover:bg-prime-teal text-white px-4 py-2 rounded flex items-center justify-center transition-colors w-full"
                     onClick={handleFetchTmdbContent}
-                    disabled={fetchTmdbContentMutation.isPending}
+                    disabled={fetchTmdbContentMutation.isPending || bulkImportProgress.isImporting}
                   >
                     <RefreshCcw className={`mr-2 h-4 w-4 ${fetchTmdbContentMutation.isPending ? 'animate-spin' : ''}`} /> 
                     Import Content
@@ -637,7 +761,7 @@ const AdminPanel = ({ onClose }: AdminPanelProps) => {
                 </div>
               </div>
               
-              {fetchTmdbContentMutation.isPending && (
+              {fetchTmdbContentMutation.isPending && !bulkImportProgress.isImporting && (
                 <div className="text-center py-8 border border-dashed border-prime-gray/30 rounded-lg">
                   <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-prime-blue mx-auto mb-4"></div>
                   <p className="text-prime-blue">
@@ -649,7 +773,7 @@ const AdminPanel = ({ onClose }: AdminPanelProps) => {
                 </div>
               )}
               
-              {!fetchTmdbContentMutation.isPending && fetchTmdbContentMutation.isSuccess && (
+              {!fetchTmdbContentMutation.isPending && !bulkImportProgress.isImporting && fetchTmdbContentMutation.isSuccess && (
                 <div className="text-center py-8 border border-dashed border-prime-blue/30 rounded-lg bg-prime-blue/5">
                   <Check className="h-12 w-12 text-prime-blue mx-auto mb-4" />
                   <p className="text-white">
@@ -661,7 +785,7 @@ const AdminPanel = ({ onClose }: AdminPanelProps) => {
                 </div>
               )}
               
-              {!fetchTmdbContentMutation.isPending && fetchTmdbContentMutation.isError && (
+              {!fetchTmdbContentMutation.isPending && !bulkImportProgress.isImporting && fetchTmdbContentMutation.isError && (
                 <div className="text-center py-8 border border-dashed border-red-500/30 rounded-lg bg-red-500/5">
                   <X className="h-12 w-12 text-red-500 mx-auto mb-4" />
                   <p className="text-white">
@@ -669,6 +793,114 @@ const AdminPanel = ({ onClose }: AdminPanelProps) => {
                   </p>
                   <p className="text-prime-gray text-sm mt-2">
                     Please check your API keys and try again.
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            {/* Bulk Import Section */}
+            <div className="bg-prime-dark-darker rounded-lg p-6">
+              <h3 className="text-xl font-semibold text-white mb-4">Bulk Import by Year Range</h3>
+              <p className="text-prime-gray mb-6">
+                Efficiently import content from multiple years at once. This is useful for building up your 
+                library with content from specific time periods.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                <div className="w-full sm:w-1/3">
+                  <label className="block text-prime-gray text-sm mb-1">Content Type</label>
+                  <Select 
+                    value={tmdbContentType} 
+                    onValueChange={setTmdbContentType}
+                    disabled={bulkImportProgress.isImporting}
+                  >
+                    <SelectTrigger className="bg-prime-dark text-white px-4 py-2 rounded border border-white/20 focus:outline-none focus:ring-2 focus:ring-prime-blue w-full">
+                      <SelectValue placeholder="Select Type" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-prime-dark text-white border border-white/20">
+                      <SelectItem value="movie">Movies</SelectItem>
+                      <SelectItem value="tv">TV Shows</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="w-full sm:w-1/3">
+                  <label className="block text-prime-gray text-sm mb-1">Start Year</label>
+                  <Input
+                    type="number"
+                    min="1900"
+                    max={new Date().getFullYear()}
+                    value={tmdbYearRange.start}
+                    onChange={(e) => setTmdbYearRange(prev => ({ ...prev, start: e.target.value }))}
+                    className="bg-prime-dark text-white px-4 py-2 rounded border border-white/20 focus:outline-none focus:ring-2 focus:ring-prime-blue w-full"
+                    placeholder="e.g. 2015"
+                    disabled={bulkImportProgress.isImporting}
+                  />
+                </div>
+                
+                <div className="w-full sm:w-1/3">
+                  <label className="block text-prime-gray text-sm mb-1">End Year</label>
+                  <Input
+                    type="number"
+                    min="1900"
+                    max={new Date().getFullYear()}
+                    value={tmdbYearRange.end}
+                    onChange={(e) => setTmdbYearRange(prev => ({ ...prev, end: e.target.value }))}
+                    className="bg-prime-dark text-white px-4 py-2 rounded border border-white/20 focus:outline-none focus:ring-2 focus:ring-prime-blue w-full"
+                    placeholder="e.g. 2023"
+                    disabled={bulkImportProgress.isImporting}
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end mb-6">
+                <Button 
+                  className="bg-prime-blue hover:bg-prime-teal text-white px-4 py-2 rounded flex items-center transition-colors"
+                  onClick={handleBulkImport}
+                  disabled={bulkImportProgress.isImporting || fetchTmdbContentMutation.isPending}
+                >
+                  <RefreshCcw className={`mr-2 h-4 w-4 ${bulkImportProgress.isImporting ? 'animate-spin' : ''}`} /> 
+                  Start Bulk Import
+                </Button>
+              </div>
+              
+              {bulkImportProgress.isImporting && (
+                <div className="border border-dashed border-prime-gray/30 rounded-lg p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h4 className="text-white font-semibold">Bulk Import in Progress</h4>
+                      <p className="text-prime-gray text-sm mt-1">
+                        Currently processing year {bulkImportProgress.currentYear} 
+                        ({bulkImportProgress.currentYear - parseInt(tmdbYearRange.start) + 1} of {bulkImportProgress.totalYears})
+                      </p>
+                    </div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-prime-blue"></div>
+                  </div>
+                  
+                  <div className="w-full bg-prime-dark rounded-full h-2.5 mb-2">
+                    <div 
+                      className="bg-prime-blue h-2.5 rounded-full" 
+                      style={{ 
+                        width: `${Math.round((bulkImportProgress.currentYear - parseInt(tmdbYearRange.start) + 1) / bulkImportProgress.totalYears * 100)}%` 
+                      }}
+                    />
+                  </div>
+                  
+                  <div className="flex justify-between text-xs text-prime-gray">
+                    <span>Items processed: {bulkImportProgress.processedCount}</span>
+                    <span>Errors: {bulkImportProgress.errorCount}</span>
+                  </div>
+                </div>
+              )}
+              
+              {!bulkImportProgress.isImporting && bulkImportProgress.processedCount > 0 && (
+                <div className="text-center py-6 border border-dashed border-prime-blue/30 rounded-lg bg-prime-blue/5">
+                  <Check className="h-10 w-10 text-prime-blue mx-auto mb-3" />
+                  <p className="text-white">
+                    Bulk import completed successfully!
+                  </p>
+                  <p className="text-prime-gray text-sm mt-1">
+                    Imported {bulkImportProgress.processedCount} items from {tmdbYearRange.start} to {tmdbYearRange.end}.
                   </p>
                 </div>
               )}
