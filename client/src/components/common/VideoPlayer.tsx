@@ -200,66 +200,22 @@ export default function VideoPlayer({
         frameBorder="0"
       />
       
-      {/* Custom controls overlay */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent z-20 flex items-center justify-between opacity-0 hover:opacity-100 transition-opacity">
-        <div className="flex items-center gap-4">
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={() => setProgress(p => Math.max(0, p - 10))}
-            className="text-white hover:bg-white/20 flex items-center gap-1"
-          >
-            <span>-10s</span>
-          </Button>
-          
-          <div className="hidden sm:block">
-            <div className="w-32 h-1.5 bg-white/30 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-prime-blue rounded-full" 
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <div className="text-xs text-white/70 mt-1 text-center">
-              {progress}% watched
-            </div>
-          </div>
-          
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={() => setProgress(p => Math.min(100, p + 10))}
-            className="text-white hover:bg-white/20 flex items-center gap-1"
-          >
-            <span>+10s</span>
-          </Button>
-        </div>
-        
-        <div className="flex items-center gap-4">
-          {/* Subtitles selection */}
-          <Select value={selectedSubtitle} onValueChange={handleSubtitleChange}>
-            <SelectTrigger className="w-[140px] bg-black/50 border-none text-white">
-              <Settings size={16} className="mr-2" />
-              <SelectValue placeholder="Subtitles" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="off">Off</SelectItem>
-              {subtitles.map((lang) => (
-                <SelectItem key={lang} value={lang}>
-                  {getLanguageName(lang)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={enterFullscreen}
-            className="text-white hover:bg-white/20"
-          >
-            <Maximize />
-          </Button>
-        </div>
+      {/* Subtitle selector outside the video frame */}
+      <div className="mt-4 flex justify-end">
+        <Select value={selectedSubtitle} onValueChange={handleSubtitleChange}>
+          <SelectTrigger className="w-[180px] bg-prime-dark-light text-white">
+            <Settings size={16} className="mr-2" />
+            <SelectValue placeholder="Subtitles" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="off">Off</SelectItem>
+            {subtitles.map((lang) => (
+              <SelectItem key={lang} value={lang}>
+                {getLanguageName(lang)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );

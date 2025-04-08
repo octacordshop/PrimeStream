@@ -11,7 +11,7 @@ const Footer = () => {
               <a className="text-prime-blue font-bold text-2xl">PrimeStream</a>
             </Link>
             <p className="text-prime-gray mt-2 max-w-md">
-              Stream your favorite movies and TV shows anytime, anywhere. Powered by Vidsrc API.
+              Stream your favorite movies and TV shows anytime, anywhere. Powered by Octacord A1 Agent.
             </p>
           </div>
           
