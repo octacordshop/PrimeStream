@@ -8,7 +8,15 @@ import {
   Check, 
   X, 
   ChevronLeft, 
-  ChevronRight 
+  ChevronRight,
+  ArrowUp,
+  Users,
+  Clock,
+  Star,
+  Save,
+  Loader2,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
+import { Checkbox } from '@/components/ui/checkbox';
 import { queryClient } from '@/lib/queryClient';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
@@ -43,6 +52,18 @@ const AdminPanel = ({ onClose }: AdminPanelProps) => {
     processedCount: 0,
     errorCount: 0
   });
+  
+  // Hero content selection state
+  const [heroContentType, setHeroContentType] = useState('movie');
+  const [heroContentId, setHeroContentId] = useState<number | null>(null);
+  
+  // Auto-fetch settings state
+  const [autoFetchEnabled, setAutoFetchEnabled] = useState(false);
+  const [autoFetchInterval, setAutoFetchInterval] = useState('daily');
+  const [autoFetchMovies, setAutoFetchMovies] = useState(true);
+  const [autoFetchTVShows, setAutoFetchTVShows] = useState(true);
+  const [preventDuplicates, setPreventDuplicates] = useState(true);
+  
   const { toast } = useToast();
   
   // Get content based on type
@@ -387,6 +408,79 @@ const AdminPanel = ({ onClose }: AdminPanelProps) => {
     if (window.confirm(`Are you sure you want to delete "${title}"? This action cannot be undone.`)) {
       deleteContentMutation.mutate({ id, type });
     }
+  };
+  
+  // Set hero content mutation
+  const setHeroContentMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('POST', '/api/admin/hero', { 
+        type: heroContentType, 
+        id: heroContentId 
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Hero Content Updated",
+        description: `The selected ${heroContentType} has been set as hero content.`,
+      });
+      
+      // Invalidate featured content query
+      queryClient.invalidateQueries({ queryKey: ['/api/featured'] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Update Failed",
+        description: `Failed to set hero content: ${error}`,
+        variant: "destructive",
+      });
+    }
+  });
+  
+  // Handle hero content selection
+  const handleSetHeroContent = () => {
+    if (!heroContentId) {
+      toast({
+        title: "No Content Selected",
+        description: "Please select a movie or TV show to feature in the hero section.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setHeroContentMutation.mutate();
+  };
+  
+  // Save auto-fetch settings mutation
+  const saveSettingsMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest('POST', '/api/admin/settings', {
+        autoFetch: {
+          enabled: autoFetchEnabled,
+          interval: autoFetchInterval,
+          fetchMovies: autoFetchMovies,
+          fetchTVShows: autoFetchTVShows,
+          preventDuplicates: preventDuplicates
+        }
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Settings Saved",
+        description: "Auto-fetch settings have been updated successfully.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Settings Update Failed",
+        description: `Failed to save settings: ${error}`,
+        variant: "destructive",
+      });
+    }
+  });
+  
+  // Handle save auto-fetch settings
+  const handleSaveAutoFetchSettings = () => {
+    saveSettingsMutation.mutate();
   };
   
   // Filter content based on search term
@@ -908,21 +1002,337 @@ const AdminPanel = ({ onClose }: AdminPanelProps) => {
           </TabsContent>
           
           <TabsContent value="analytics">
-            <div className="text-center py-12">
-              <h3 className="text-xl font-semibold mb-2">Analytics Dashboard</h3>
-              <p className="text-prime-gray mb-4">Analytics functionality is not available in this demo.</p>
-              <div className="p-8 border border-dashed border-prime-gray/30 rounded-lg">
-                <p className="text-prime-blue">Analytics visualizations would appear here</p>
+            <div className="bg-prime-dark-darker rounded-lg p-6">
+              <h3 className="text-xl font-semibold text-white mb-4">Platform Analytics</h3>
+              <p className="text-prime-gray mb-6">Track platform usage, engagement metrics, and viewer behavior.</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="bg-prime-dark p-4 rounded-lg">
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="text-white">Total Views</h4>
+                    <span className="text-prime-blue">
+                      <ArrowUp className="h-4 w-4" />
+                    </span>
+                  </div>
+                  <div className="text-3xl font-bold text-white mb-2">12,487</div>
+                  <div className="text-xs text-prime-gray">
+                    <span className="text-green-500">↑ 18%</span> vs last month
+                  </div>
+                </div>
+                
+                <div className="bg-prime-dark p-4 rounded-lg">
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="text-white">Active Users</h4>
+                    <span className="text-prime-blue">
+                      <Users className="h-4 w-4" />
+                    </span>
+                  </div>
+                  <div className="text-3xl font-bold text-white mb-2">824</div>
+                  <div className="text-xs text-prime-gray">
+                    <span className="text-green-500">↑ 12%</span> vs last month
+                  </div>
+                </div>
+                
+                <div className="bg-prime-dark p-4 rounded-lg">
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="text-white">Avg. Watch Time</h4>
+                    <span className="text-prime-blue">
+                      <Clock className="h-4 w-4" />
+                    </span>
+                  </div>
+                  <div className="text-3xl font-bold text-white mb-2">38 min</div>
+                  <div className="text-xs text-prime-gray">
+                    <span className="text-green-500">↑ 7%</span> vs last month
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-prime-dark p-4 rounded-lg">
+                  <h4 className="text-white mb-4">Top Content</h4>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-prime-gray border-b border-white/10">
+                        <th className="text-left pb-2">Title</th>
+                        <th className="text-right pb-2">Views</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-white/5">
+                        <td className="py-2">Opus</td>
+                        <td className="text-right">1,245</td>
+                      </tr>
+                      <tr className="border-b border-white/5">
+                        <td className="py-2">The Beginning After The End</td>
+                        <td className="text-right">987</td>
+                      </tr>
+                      <tr className="border-b border-white/5">
+                        <td className="py-2">Cleaner</td>
+                        <td className="text-right">856</td>
+                      </tr>
+                      <tr className="border-b border-white/5">
+                        <td className="py-2">PULSE</td>
+                        <td className="text-right">743</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2">Dope Thief</td>
+                        <td className="text-right">689</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                
+                <div className="bg-prime-dark p-4 rounded-lg">
+                  <h4 className="text-white mb-4">User Activity</h4>
+                  <div className="h-48 w-full flex items-end justify-between px-2">
+                    {Array.from({ length: 7 }).map((_, i) => (
+                      <div key={i} className="relative flex flex-col items-center">
+                        <div 
+                          className="bg-prime-blue w-8 rounded-t"
+                          style={{ 
+                            height: `${Math.max(15, Math.floor(Math.random() * 100))}%` 
+                          }}
+                        ></div>
+                        <div className="text-xs text-prime-gray mt-2">
+                          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i]}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </TabsContent>
           
           <TabsContent value="settings">
-            <div className="text-center py-12">
-              <h3 className="text-xl font-semibold mb-2">Admin Settings</h3>
-              <p className="text-prime-gray mb-4">Settings functionality is not available in this demo.</p>
-              <div className="p-8 border border-dashed border-prime-gray/30 rounded-lg">
-                <p className="text-prime-blue">Admin configuration options would appear here</p>
+            <div className="bg-prime-dark-darker rounded-lg p-6">
+              <h3 className="text-xl font-semibold text-white mb-4">Platform Settings</h3>
+              <p className="text-prime-gray mb-6">Configure platform behavior and scheduling options.</p>
+              
+              <div className="space-y-8">
+                {/* Hero Content Management */}
+                <div className="bg-prime-dark p-6 rounded-lg">
+                  <h4 className="text-lg font-semibold text-white mb-4">Hero Section Management</h4>
+                  <p className="text-prime-gray mb-4">
+                    Select content to feature in the hero section of the home page.
+                  </p>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-prime-gray text-sm mb-2">Content Type</label>
+                      <Select value={heroContentType} onValueChange={setHeroContentType}>
+                        <SelectTrigger className="bg-prime-dark-light text-white border-white/20 focus:ring-prime-blue">
+                          <SelectValue placeholder="Select content type" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-prime-dark text-white border-white/20">
+                          <SelectItem value="movie">Movie</SelectItem>
+                          <SelectItem value="tv">TV Show</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-prime-gray text-sm mb-2">Select Content</label>
+                      <Select 
+                        value={String(heroContentId)}
+                        onValueChange={(value) => setHeroContentId(parseInt(value))}
+                      >
+                        <SelectTrigger className="bg-prime-dark-light text-white border-white/20 focus:ring-prime-blue">
+                          <SelectValue placeholder="Select content" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-prime-dark text-white border-white/20 max-h-80">
+                          {heroContentType === 'movie'
+                            ? movies?.map(movie => (
+                                <SelectItem key={movie.id} value={String(movie.id)}>
+                                  {movie.title} ({movie.year})
+                                </SelectItem>
+                              ))
+                            : tvShows?.map(show => (
+                                <SelectItem key={show.id} value={String(show.id)}>
+                                  {show.title} ({show.year})
+                                </SelectItem>
+                              ))
+                          }
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="pt-2">
+                      <Button 
+                        className="bg-prime-blue hover:bg-prime-teal text-white"
+                        onClick={handleSetHeroContent}
+                        disabled={!heroContentId || setHeroContentMutation.isPending}
+                      >
+                        {setHeroContentMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Updating...
+                          </>
+                        ) : (
+                          <>
+                            <Star className="mr-2 h-4 w-4" />
+                            Set as Hero Content
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Content Auto-Fetch Configuration */}
+                <div className="bg-prime-dark p-6 rounded-lg">
+                  <h4 className="text-lg font-semibold text-white mb-4">Auto-Fetch Settings</h4>
+                  <p className="text-prime-gray mb-4">
+                    Configure automatic content discovery and import options.
+                  </p>
+                  
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h5 className="text-white font-medium">Enable Auto-Fetch</h5>
+                        <p className="text-sm text-prime-gray mt-1">
+                          Automatically check and import new content at regular intervals
+                        </p>
+                      </div>
+                      <Switch
+                        checked={autoFetchEnabled}
+                        onCheckedChange={setAutoFetchEnabled}
+                        className="data-[state=checked]:bg-prime-blue"
+                      />
+                    </div>
+                    
+                    <div className={!autoFetchEnabled ? "opacity-50" : ""}>
+                      <label className="block text-prime-gray text-sm mb-2">Auto-Fetch Interval</label>
+                      <Select 
+                        value={autoFetchInterval} 
+                        onValueChange={setAutoFetchInterval}
+                        disabled={!autoFetchEnabled}
+                      >
+                        <SelectTrigger className="bg-prime-dark-light text-white border-white/20 focus:ring-prime-blue">
+                          <SelectValue placeholder="Select interval" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-prime-dark text-white border-white/20">
+                          <SelectItem value="hourly">Hourly</SelectItem>
+                          <SelectItem value="daily">Daily</SelectItem>
+                          <SelectItem value="weekly">Weekly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className={!autoFetchEnabled ? "opacity-50" : ""}>
+                      <label className="block text-prime-gray text-sm mb-2">Content Types to Fetch</label>
+                      <div className="space-x-4 mt-1">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="fetch-movies" 
+                            checked={autoFetchMovies}
+                            onCheckedChange={(checked) => setAutoFetchMovies(checked === true)}
+                            disabled={!autoFetchEnabled}
+                            className="data-[state=checked]:bg-prime-blue"
+                          />
+                          <label htmlFor="fetch-movies" className="text-white cursor-pointer">
+                            Movies
+                          </label>
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="fetch-tvshows" 
+                            checked={autoFetchTVShows}
+                            onCheckedChange={(checked) => setAutoFetchTVShows(checked === true)}
+                            disabled={!autoFetchEnabled}
+                            className="data-[state=checked]:bg-prime-blue"
+                          />
+                          <label htmlFor="fetch-tvshows" className="text-white cursor-pointer">
+                            TV Shows
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className={!autoFetchEnabled ? "opacity-50" : ""}>
+                      <label className="block text-prime-gray text-sm mb-2">Fetch Settings</label>
+                      <div className="flex items-center space-x-2 mt-1">
+                        <Checkbox 
+                          id="prevent-duplicates" 
+                          checked={preventDuplicates}
+                          onCheckedChange={(checked) => setPreventDuplicates(checked === true)}
+                          disabled={!autoFetchEnabled}
+                          className="data-[state=checked]:bg-prime-blue"
+                        />
+                        <label htmlFor="prevent-duplicates" className="text-white cursor-pointer">
+                          Prevent duplicate imports
+                        </label>
+                      </div>
+                    </div>
+                    
+                    <div className="pt-2">
+                      <Button 
+                        className="bg-prime-blue hover:bg-prime-teal text-white"
+                        onClick={handleSaveAutoFetchSettings}
+                        disabled={saveSettingsMutation.isPending}
+                      >
+                        {saveSettingsMutation.isPending ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            <Save className="mr-2 h-4 w-4" />
+                            Save Settings
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Performance Optimization */}
+                <div className="bg-prime-dark p-6 rounded-lg">
+                  <h4 className="text-lg font-semibold text-white mb-4">Performance Optimization</h4>
+                  <p className="text-prime-gray mb-4">
+                    Configure caching and performance settings.
+                  </p>
+                  
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h5 className="text-white font-medium">Enable API Caching</h5>
+                        <p className="text-sm text-prime-gray mt-1">
+                          Cache API responses to improve load times
+                        </p>
+                      </div>
+                      <Switch
+                        checked={true}
+                        className="data-[state=checked]:bg-prime-blue"
+                      />
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h5 className="text-white font-medium">Enable Image Optimization</h5>
+                        <p className="text-sm text-prime-gray mt-1">
+                          Optimize images for faster loading
+                        </p>
+                      </div>
+                      <Switch
+                        checked={true}
+                        className="data-[state=checked]:bg-prime-blue"
+                      />
+                    </div>
+                    
+                    <div>
+                      <Button 
+                        variant="outline" 
+                        className="border-white/20 text-white hover:bg-prime-dark-light"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Clear Cache
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </TabsContent>

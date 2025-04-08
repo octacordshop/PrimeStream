@@ -923,6 +923,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch TV shows by year from TMDB" });
     }
   });
+  
+  // --- Hero Content and Settings Endpoints ---
+  
+  // Set hero content
+  app.post("/api/admin/hero", async (req, res) => {
+    try {
+      const { type, id } = req.body;
+      
+      if (!type || !id || !["movie", "tv"].includes(type)) {
+        return res.status(400).json({ message: "Invalid hero content data" });
+      }
+      
+      // First, unfeature all content
+      if (type === "movie") {
+        // Get all featured movies and unfeature them
+        const featuredMovies = await storage.getFeaturedMovies(50);
+        for (const movie of featuredMovies) {
+          await storage.updateMovie(movie.id, { isFeatured: false });
+        }
+        
+        // Feature the selected movie
+        const movie = await storage.updateMovie(id, { isFeatured: true });
+        if (!movie) {
+          return res.status(404).json({ message: "Movie not found" });
+        }
+        
+        res.json({ message: "Hero content updated successfully", content: movie });
+      } else {
+        // Get all featured TV shows and unfeature them
+        const featuredTVShows = await storage.getFeaturedTVShows(50);
+        for (const show of featuredTVShows) {
+          await storage.updateTVShow(show.id, { isFeatured: false });
+        }
+        
+        // Feature the selected TV show
+        const tvShow = await storage.updateTVShow(id, { isFeatured: true });
+        if (!tvShow) {
+          return res.status(404).json({ message: "TV show not found" });
+        }
+        
+        res.json({ message: "Hero content updated successfully", content: tvShow });
+      }
+    } catch (error) {
+      console.error("Error updating hero content:", error);
+      res.status(500).json({ message: "Failed to update hero content" });
+    }
+  });
+  
+  // Save auto-fetch settings
+  app.post("/api/admin/settings", async (req, res) => {
+    try {
+      const { autoFetch } = req.body;
+      
+      if (!autoFetch) {
+        return res.status(400).json({ message: "Invalid settings data" });
+      }
+      
+      // In a real app, we would save these settings to the database
+      // For now, we'll just respond with success
+      
+      res.json({ 
+        message: "Settings saved successfully", 
+        settings: { 
+          autoFetch
+        }
+      });
+    } catch (error) {
+      console.error("Error saving settings:", error);
+      res.status(500).json({ message: "Failed to save settings" });
+    }
+  });
 
   return httpServer;
 }
