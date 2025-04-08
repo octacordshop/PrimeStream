@@ -29,10 +29,8 @@ async function main() {
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         username TEXT NOT NULL UNIQUE,
-        email TEXT NOT NULL UNIQUE,
         password TEXT NOT NULL,
-        role TEXT NOT NULL DEFAULT 'user',
-        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        is_admin BOOLEAN NOT NULL DEFAULT FALSE
       )
     `;
     console.log('Created users table');
@@ -143,8 +141,8 @@ async function main() {
 
     // Insert admin user
     await sqlClient`
-      INSERT INTO users (username, email, password, role)
-      VALUES ('admin', 'admin@example.com', 'admin', 'admin')
+      INSERT INTO users (username, password, is_admin)
+      VALUES ('admin', 'admin', TRUE)
       ON CONFLICT (username) DO NOTHING
     `;
     console.log('Added admin user');
