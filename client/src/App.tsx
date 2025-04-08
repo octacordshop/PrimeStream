@@ -25,12 +25,12 @@ function Router() {
     <div className="flex flex-col min-h-screen bg-prime-dark text-white">
       <Switch>
         <Route path="/auth" component={AuthPage} />
-        <Route path="/watch/:mediaType/:id">
+        <ProtectedRoute path="/watch/:mediaType/:id">
           {/* Watch page doesn't have header/footer for fullscreen viewing */}
           <main className="min-h-screen bg-black">
             <WatchPage />
           </main>
-        </Route>
+        </ProtectedRoute>
         <Route path="*">
           <div className="flex flex-col min-h-screen bg-prime-dark text-white">
             <Header />

@@ -171,8 +171,8 @@ export default function WatchPage() {
         </div>
       </div>
       
-      {/* Video player */}
-      <div className="mb-8">
+      {/* Full screen video player */}
+      <div className="mb-8 w-full max-w-5xl mx-auto">
         <VideoPlayer 
           mediaType={mediaType}
           imdbId={content.imdbId}
@@ -181,6 +181,7 @@ export default function WatchPage() {
           episode={selectedEpisode}
           episodeId={selectedEpisodeId}
           onClose={handleGoBack}
+          autoPlay={true}
         />
       </div>
       
