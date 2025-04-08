@@ -4,7 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { useToast } from "@/hooks/use-toast";
 import { AuthProvider } from "@/hooks/use-auth";
-import { ProtectedRoute } from "@/lib/protected-route";
+import { ProtectedRoute, AdminProtectedRoute } from "@/lib/protected-route";
 import NotFound from "@/pages/not-found";
 import HomePage from "@/pages/HomePage";
 import MoviePage from "@/pages/MoviePage";
@@ -41,7 +41,7 @@ function Router() {
                 <ProtectedRoute path="/show/:id" component={TVShowPage} />
                 <ProtectedRoute path="/my-list" component={MyListPage} />
                 <ProtectedRoute path="/search" component={SearchPage} />
-                <ProtectedRoute path="/admin" component={AdminPage} />
+                <AdminProtectedRoute path="/admin" component={AdminPage} />
                 <Route component={NotFound} />
               </Switch>
             </main>

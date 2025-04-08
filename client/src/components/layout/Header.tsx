@@ -5,7 +5,8 @@ import {
   User, 
   Menu, 
   X,
-  LogOut 
+  LogOut,
+  ShieldAlert 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -92,6 +93,13 @@ const Header = () => {
                   My List
                 </a>
               </Link>
+              {user?.isAdmin && (
+                <Link href="/admin">
+                  <a className={`transition flex items-center gap-1 ${location === '/admin' ? 'text-white' : 'text-prime-gray hover:text-prime-blue'}`}>
+                    <ShieldAlert className="h-4 w-4" /> Admin
+                  </a>
+                </Link>
+              )}
             </nav>
           </div>
           
@@ -143,6 +151,15 @@ const Header = () => {
                     <User className="mr-2 h-4 w-4" />
                     <span>Profile</span>
                   </DropdownMenuItem>
+                  {user?.isAdmin && (
+                    <DropdownMenuItem 
+                      onClick={() => setLocation('/admin')}
+                      className="text-white focus:bg-prime-dark-light cursor-pointer"
+                    >
+                      <ShieldAlert className="mr-2 h-4 w-4" />
+                      <span>Admin Panel</span>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem 
                     onClick={() => {
                       logoutMutation.mutate();
@@ -217,14 +234,16 @@ const Header = () => {
                   My List
                 </a>
               </Link>
-              <Link href="/admin">
-                <a 
-                  className={`transition ${location === '/admin' ? 'text-white' : 'text-prime-gray'}`}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  Admin Panel
-                </a>
-              </Link>
+              {user?.isAdmin && (
+                <Link href="/admin">
+                  <a 
+                    className={`transition flex items-center gap-1 ${location === '/admin' ? 'text-white' : 'text-prime-gray'}`}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <ShieldAlert className="h-4 w-4" /> Admin Panel
+                  </a>
+                </Link>
+              )}
               {!user && (
                 <Link href="/auth">
                   <a 
