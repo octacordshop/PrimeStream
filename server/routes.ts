@@ -7,6 +7,7 @@ import {
   insertMovieSchema, insertTVShowSchema, insertEpisodeSchema,
   insertWatchlistSchema, insertRecentlyWatchedSchema
 } from "@shared/schema";
+import * as tmdbApi from "./tmdb-api";
 
 // Helper to safely parse JSON
 const safeJsonParse = (text: string) => {
@@ -773,6 +774,149 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error refreshing content:", error);
       res.status(500).json({ message: "Failed to refresh content", error: error instanceof Error ? error.message : String(error) });
+    }
+  });
+
+  // --- TMDB API Integration ---
+
+  // Get available subtitles for a movie or TV show
+  app.get("/api/subtitles/:type/:imdbId", async (req, res) => {
+    try {
+      const { type, imdbId } = req.params;
+      if (type !== 'movie' && type !== 'tv') {
+        return res.status(400).json({ message: "Type must be 'movie' or 'tv'" });
+      }
+      
+      const subtitles = await tmdbApi.getAvailableSubtitles(type as 'movie' | 'tv', imdbId);
+      res.json(subtitles);
+    } catch (error) {
+      console.error("Error fetching subtitles:", error);
+      res.status(500).json({ message: "Failed to fetch available subtitles" });
+    }
+  });
+
+  // --- TMDB Admin Endpoints ---
+
+  // Fetch popular movies from TMDB
+  app.post("/api/admin/tmdb/fetch-popular-movies", async (req, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const result = await tmdbApi.getPopularMovies(page);
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching popular movies from TMDB:", error);
+      res.status(500).json({ message: "Failed to fetch popular movies from TMDB" });
+    }
+  });
+
+  // Fetch popular TV shows from TMDB
+  app.post("/api/admin/tmdb/fetch-popular-tvshows", async (req, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const result = await tmdbApi.getPopularTVShows(page);
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching popular TV shows from TMDB:", error);
+      res.status(500).json({ message: "Failed to fetch popular TV shows from TMDB" });
+    }
+  });
+
+  // Fetch movies from TMDB by year
+  app.post("/api/admin/tmdb/fetch-movies-by-year", async (req, res) => {
+    try {
+      const year = parseInt(req.query.year as string);
+      if (isNaN(year) || year < 1900 || year > new Date().getFullYear()) {
+        return res.status(400).json({ message: "Invalid year provided" });
+      }
+      
+      const page = parseInt(req.query.page as string) || 1;
+      const result = await tmdbApi.discoverMoviesByYear(year, page);
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching movies by year from TMDB:", error);
+      res.status(500).json({ message: "Failed to fetch movies by year from TMDB" });
+    }
+  });
+
+  // Fetch TV shows from TMDB by year
+  app.post("/api/admin/tmdb/fetch-tvshows-by-year", async (req, res) => {
+    try {
+      const year = parseInt(req.query.year as string);
+      if (isNaN(year) || year < 1900 || year > new Date().getFullYear()) {
+        return res.status(400).json({ message: "Invalid year provided" });
+      }
+      
+      const page = parseInt(req.query.page as string) || 1;
+      const result = await tmdbApi.discoverTVShowsByYear(year, page);
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching TV shows by year from TMDB:", error);
+      res.status(500).json({ message: "Failed to fetch TV shows by year from TMDB" });
+    }
+  });
+
+  // Refresh content database with popular content
+  app.post("/api/admin/tmdb/refresh-content", async (req, res) => {
+    try {
+      const pages = parseInt(req.query.pages as string) || 1;
+      const result = await tmdbApi.refreshContentDatabase(pages);
+      res.json(result);
+    } catch (error) {
+      console.error("Error refreshing content from TMDB:", error);
+      res.status(500).json({ message: "Failed to refresh content from TMDB" });
+    }
+  });
+  
+  // Add a subtitles route to fetch available subtitles
+  app.get("/api/subtitles/:contentType/:imdbId", async (req, res) => {
+    try {
+      const { contentType, imdbId } = req.params;
+      
+      if (!contentType || !imdbId || !['movie', 'tv'].includes(contentType)) {
+        return res.status(400).json({ message: "Valid contentType and imdbId parameters are required" });
+      }
+      
+      const subtitles = await tmdbApi.getAvailableSubtitles(contentType as 'movie' | 'tv', imdbId);
+      res.json(subtitles);
+    } catch (error) {
+      console.error("Error fetching available subtitles:", error);
+      res.status(500).json({ message: "Failed to fetch subtitles" });
+    }
+  });
+  
+  // Import movies from TMDB by year (direct API endpoint for admin panel)
+  app.post("/api/admin/tmdb/movies/:year", async (req, res) => {
+    try {
+      const year = parseInt(req.params.year);
+      const page = parseInt(req.query.page as string) || 1;
+      
+      if (isNaN(year) || year < 1900 || year > new Date().getFullYear()) {
+        return res.status(400).json({ message: "Valid year parameter is required (1900 - current year)" });
+      }
+      
+      const result = await tmdbApi.discoverMoviesByYear(year, page);
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching movies by year from TMDB:", error);
+      res.status(500).json({ message: "Failed to fetch movies by year from TMDB" });
+    }
+  });
+  
+  // Import TV shows from TMDB by year (direct API endpoint for admin panel)
+  app.post("/api/admin/tmdb/tvshows/:year", async (req, res) => {
+    try {
+      const year = parseInt(req.params.year);
+      const page = parseInt(req.query.page as string) || 1;
+      
+      if (isNaN(year) || year < 1900 || year > new Date().getFullYear()) {
+        return res.status(400).json({ message: "Valid year parameter is required (1900 - current year)" });
+      }
+      
+      const result = await tmdbApi.discoverTVShowsByYear(year, page);
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching TV shows by year from TMDB:", error);
+      res.status(500).json({ message: "Failed to fetch TV shows by year from TMDB" });
     }
   });
 

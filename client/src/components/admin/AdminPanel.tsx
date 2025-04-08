@@ -29,6 +29,9 @@ const AdminPanel = ({ onClose }: AdminPanelProps) => {
   const [contentType, setContentType] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(true);
+  const [tmdbYear, setTmdbYear] = useState(new Date().getFullYear().toString());
+  const [tmdbContentType, setTmdbContentType] = useState('movie');
+  const [tmdbPage, setTmdbPage] = useState('1');
   const { toast } = useToast();
   
   // Get content based on type
@@ -58,7 +61,70 @@ const AdminPanel = ({ onClose }: AdminPanelProps) => {
     queryKey: ['/api/tvshows/latest'],
   });
   
-  // Fetch latest content mutation
+  // Fetch TMDB content by year mutation
+  const fetchTmdbContentMutation = useMutation({
+    mutationFn: async (params: { type: string, year: number, page: number }) => {
+      const url = params.type === 'movie'
+        ? `/api/admin/tmdb/movies/${params.year}?page=${params.page}`
+        : `/api/admin/tmdb/tvshows/${params.year}?page=${params.page}`;
+      
+      return apiRequest('POST', url);
+    },
+    onSuccess: (response, params) => {
+      response.json().then(data => {
+        toast({
+          title: "TMDB Content Imported",
+          description: `Successfully imported ${data.processed} ${params.type}s from TMDB (year: ${params.year}, page: ${params.page}).`,
+        });
+        
+        // Invalidate relevant queries to refresh the data
+        if (params.type === 'movie') {
+          queryClient.invalidateQueries({ queryKey: ['/api/movies/latest'] });
+        } else {
+          queryClient.invalidateQueries({ queryKey: ['/api/tvshows/latest'] });
+        }
+      });
+    },
+    onError: (error, params) => {
+      toast({
+        title: "TMDB Import Failed",
+        description: `Failed to import ${params.type}s from TMDB: ${error}`,
+        variant: "destructive",
+      });
+    }
+  });
+  
+  // Handle TMDB content fetch
+  const handleFetchTmdbContent = () => {
+    const year = parseInt(tmdbYear);
+    const page = parseInt(tmdbPage);
+    
+    if (isNaN(year) || year < 1900 || year > new Date().getFullYear()) {
+      toast({
+        title: "Invalid Year",
+        description: "Please enter a valid year between 1900 and the current year.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (isNaN(page) || page < 1 || page > 100) {
+      toast({
+        title: "Invalid Page",
+        description: "Please enter a valid page number between 1 and 100.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    fetchTmdbContentMutation.mutate({ 
+      type: tmdbContentType, 
+      year, 
+      page 
+    });
+  };
+  
+  // Fetch latest content mutation (from Vidsrc)
   const fetchContentMutation = useMutation({
     mutationFn: async (type: string) => {
       const url = type === 'movie' 
@@ -289,6 +355,12 @@ const AdminPanel = ({ onClose }: AdminPanelProps) => {
               Content Management
             </TabsTrigger>
             <TabsTrigger 
+              value="tmdb" 
+              className="data-[state=active]:border-b-2 data-[state=active]:border-prime-blue data-[state=active]:text-white text-prime-gray px-4 py-2 bg-transparent"
+            >
+              TMDB Import
+            </TabsTrigger>
+            <TabsTrigger 
               value="analytics" 
               className="data-[state=active]:border-b-2 data-[state=active]:border-prime-blue data-[state=active]:text-white text-prime-gray px-4 py-2 bg-transparent"
             >
@@ -503,6 +575,104 @@ const AdminPanel = ({ onClose }: AdminPanelProps) => {
                 </div>
               </>
             )}
+          </TabsContent>
+          
+          <TabsContent value="tmdb" className="space-y-6">
+            <div className="bg-prime-dark-darker rounded-lg p-6">
+              <h3 className="text-xl font-semibold text-white mb-4">Import Content from TMDB</h3>
+              <p className="text-prime-gray mb-6">
+                Discover and import movies or TV shows from TMDB by year. Only content that's available 
+                on Vidsrc will be imported to ensure playability.
+              </p>
+              
+              <div className="flex flex-col sm:flex-row gap-4 mb-6">
+                <div className="w-full sm:w-1/4">
+                  <label className="block text-prime-gray text-sm mb-1">Content Type</label>
+                  <Select value={tmdbContentType} onValueChange={setTmdbContentType}>
+                    <SelectTrigger className="bg-prime-dark text-white px-4 py-2 rounded border border-white/20 focus:outline-none focus:ring-2 focus:ring-prime-blue w-full">
+                      <SelectValue placeholder="Select Type" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-prime-dark text-white border border-white/20">
+                      <SelectItem value="movie">Movies</SelectItem>
+                      <SelectItem value="tv">TV Shows</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="w-full sm:w-1/4">
+                  <label className="block text-prime-gray text-sm mb-1">Release Year</label>
+                  <Input
+                    type="number"
+                    min="1900"
+                    max={new Date().getFullYear()}
+                    value={tmdbYear}
+                    onChange={(e) => setTmdbYear(e.target.value)}
+                    className="bg-prime-dark text-white px-4 py-2 rounded border border-white/20 focus:outline-none focus:ring-2 focus:ring-prime-blue w-full"
+                    placeholder="e.g. 2023"
+                  />
+                </div>
+                
+                <div className="w-full sm:w-1/4">
+                  <label className="block text-prime-gray text-sm mb-1">Page Number</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={tmdbPage}
+                    onChange={(e) => setTmdbPage(e.target.value)}
+                    className="bg-prime-dark text-white px-4 py-2 rounded border border-white/20 focus:outline-none focus:ring-2 focus:ring-prime-blue w-full"
+                    placeholder="1-100"
+                  />
+                </div>
+                
+                <div className="w-full sm:w-1/4 flex items-end">
+                  <Button 
+                    className="bg-prime-blue hover:bg-prime-teal text-white px-4 py-2 rounded flex items-center justify-center transition-colors w-full"
+                    onClick={handleFetchTmdbContent}
+                    disabled={fetchTmdbContentMutation.isPending}
+                  >
+                    <RefreshCcw className={`mr-2 h-4 w-4 ${fetchTmdbContentMutation.isPending ? 'animate-spin' : ''}`} /> 
+                    Import Content
+                  </Button>
+                </div>
+              </div>
+              
+              {fetchTmdbContentMutation.isPending && (
+                <div className="text-center py-8 border border-dashed border-prime-gray/30 rounded-lg">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-prime-blue mx-auto mb-4"></div>
+                  <p className="text-prime-blue">
+                    Importing content from TMDB and checking availability on Vidsrc...
+                  </p>
+                  <p className="text-prime-gray text-sm mt-2">
+                    This may take a moment as we verify each title's availability.
+                  </p>
+                </div>
+              )}
+              
+              {!fetchTmdbContentMutation.isPending && fetchTmdbContentMutation.isSuccess && (
+                <div className="text-center py-8 border border-dashed border-prime-blue/30 rounded-lg bg-prime-blue/5">
+                  <Check className="h-12 w-12 text-prime-blue mx-auto mb-4" />
+                  <p className="text-white">
+                    Content successfully imported!
+                  </p>
+                  <p className="text-prime-gray text-sm mt-2">
+                    You can find the new content in the Content Management tab.
+                  </p>
+                </div>
+              )}
+              
+              {!fetchTmdbContentMutation.isPending && fetchTmdbContentMutation.isError && (
+                <div className="text-center py-8 border border-dashed border-red-500/30 rounded-lg bg-red-500/5">
+                  <X className="h-12 w-12 text-red-500 mx-auto mb-4" />
+                  <p className="text-white">
+                    Failed to import content.
+                  </p>
+                  <p className="text-prime-gray text-sm mt-2">
+                    Please check your API keys and try again.
+                  </p>
+                </div>
+              )}
+            </div>
           </TabsContent>
           
           <TabsContent value="analytics">

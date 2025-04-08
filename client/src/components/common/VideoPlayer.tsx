@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { X, Languages } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useRecentlyWatched } from '@/context/RecentlyWatchedContext';
 import { useToast } from '@/hooks/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useQuery } from '@tanstack/react-query';
 
 interface VideoPlayerProps {
   contentType: 'movie' | 'tv';
@@ -14,6 +16,22 @@ interface VideoPlayerProps {
   onClose: () => void;
 }
 
+// Language names mapping
+const languageNames: Record<string, string> = {
+  'en': 'English',
+  'es': 'Spanish',
+  'fr': 'French',
+  'de': 'German',
+  'it': 'Italian',
+  'pt': 'Portuguese',
+  'ja': 'Japanese',
+  'ko': 'Korean',
+  'zh': 'Chinese',
+  'ar': 'Arabic',
+  'hi': 'Hindi',
+  'ru': 'Russian'
+};
+
 const VideoPlayer = ({
   contentType,
   imdbId,
@@ -24,18 +42,40 @@ const VideoPlayer = ({
   onClose
 }: VideoPlayerProps) => {
   const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [selectedSubtitle, setSelectedSubtitle] = useState<string | null>(null);
   const { addToRecentlyWatched } = useRecentlyWatched();
   const { toast } = useToast();
+  
+  // Fetch available subtitles
+  const { data: availableSubtitles = [] } = useQuery({
+    queryKey: ['/api/subtitles', contentType, imdbId],
+    queryFn: async () => {
+      try {
+        const response = await fetch(`/api/subtitles/${contentType}/${imdbId}`);
+        if (!response.ok) return [];
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching subtitles:', error);
+        return [];
+      }
+    },
+    enabled: !!imdbId
+  });
   
   // Construct the embed URL based on content type and parameters
   const getEmbedUrl = () => {
     let baseUrl = contentType === 'movie' 
-      ? `https://vidsrc.xyz/embed/movie?imdb=${imdbId}` 
-      : `https://vidsrc.xyz/embed/tv?imdb=${imdbId}`;
+      ? `https://vidsrc.me/embed/movie?imdb=${imdbId}` 
+      : `https://vidsrc.me/embed/tv?imdb=${imdbId}`;
     
     // Add season and episode parameters if provided
     if (contentType === 'tv' && season && episode) {
       baseUrl += `&season=${season}&episode=${episode}`;
+    }
+    
+    // Add subtitle parameter if selected
+    if (selectedSubtitle) {
+      baseUrl += `&ds_lang=${selectedSubtitle}`;
     }
     
     return baseUrl;
@@ -96,7 +136,36 @@ const VideoPlayer = ({
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black" onClick={onClose}></div>
       
-      <div className="absolute top-4 right-4 z-10">
+      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+        {availableSubtitles.length > 0 && (
+          <div className="relative bg-black/50 rounded-md p-1 flex items-center">
+            <Languages className="h-4 w-4 text-white mr-1" />
+            <Select 
+              value={selectedSubtitle || ""} 
+              onValueChange={(value) => {
+                if (value) {
+                  setSelectedSubtitle(value);
+                  setIframeLoaded(false); // Reload iframe when subtitle changes
+                } else {
+                  setSelectedSubtitle(null);
+                }
+              }}
+            >
+              <SelectTrigger className="bg-transparent border-0 text-white h-8 w-28 focus:ring-0">
+                <SelectValue placeholder="Subtitles" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">None</SelectItem>
+                {availableSubtitles.map((lang: string) => (
+                  <SelectItem key={lang} value={lang}>
+                    {languageNames[lang] || lang}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        
         <Button 
           variant="ghost"
           size="icon"
