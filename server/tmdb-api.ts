@@ -6,24 +6,61 @@ import { InsertMovie, InsertTVShow, InsertEpisode } from '@shared/schema';
 const TMDB_API_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/original';
 
-// Function to check if a movie is available on Vidsrc
-async function isMovieAvailableOnVidsrc(imdbId: string): Promise<boolean> {
-  try {
-    const response = await axios.head(`https://vidsrc.me/embed/movie?imdb=${imdbId}`);
-    return response.status === 200;
-  } catch (error) {
-    return false;
-  }
+/**
+ * Sleep for a specified number of milliseconds
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Function to check if a TV show is available on Vidsrc
-async function isTVShowAvailableOnVidsrc(imdbId: string, season: number, episode: number): Promise<boolean> {
-  try {
-    const response = await axios.head(`https://vidsrc.me/embed/tv?imdb=${imdbId}&season=${season}&episode=${episode}`);
-    return response.status === 200;
-  } catch (error) {
-    return false;
+/**
+ * Check if a movie is available on Vidsrc with retry logic
+ */
+async function isMovieAvailableOnVidsrc(imdbId: string, attempts = 3): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      // Add delay between requests to avoid rate limiting
+      if (i > 0) await sleep(1000 * i);
+      
+      const response = await axios.head(`https://vidsrc.xyz/embed/movie?imdb=${imdbId}`);
+      return response.status === 200;
+    } catch (error) {
+      if (error.response?.status === 429 && i < attempts - 1) {
+        console.log(`Rate limited while checking movie IMDb ID ${imdbId}, retrying (${i + 1}/${attempts})...`);
+        // Add a longer delay if rate limited
+        await sleep(2000 * (i + 1));
+        continue;
+      }
+      console.log(`Movie availability check failed for IMDb ID ${imdbId}:`, error.message);
+      return false;
+    }
   }
+  return false;
+}
+
+/**
+ * Check if a TV show is available on Vidsrc with retry logic
+ */
+async function isTVShowAvailableOnVidsrc(imdbId: string, season: number, episode: number, attempts = 3): Promise<boolean> {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      // Add delay between requests to avoid rate limiting
+      if (i > 0) await sleep(1000 * i);
+      
+      const response = await axios.head(`https://vidsrc.xyz/embed/tv?imdb=${imdbId}&season=${season}&episode=${episode}`);
+      return response.status === 200;
+    } catch (error) {
+      if (error.response?.status === 429 && i < attempts - 1) {
+        console.log(`Rate limited while checking TV show IMDb ID ${imdbId}, S${season}E${episode}, retrying (${i + 1}/${attempts})...`);
+        // Add a longer delay if rate limited
+        await sleep(2000 * (i + 1));
+        continue;
+      }
+      console.log(`TV show availability check failed for IMDb ID ${imdbId}, S${season}E${episode}:`, error.message);
+      return false;
+    }
+  }
+  return false;
 }
 
 // Get movie details from TMDB

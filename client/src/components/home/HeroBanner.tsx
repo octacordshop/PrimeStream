@@ -22,17 +22,17 @@ type FeaturedContent = {
 const HeroBanner = () => {
   const [showPlayer, setShowPlayer] = useState(false);
   const { toast } = useToast();
-  const { addToWatchlist, isItemInWatchlist } = useWatchlist();
+  const watchlistContext = useWatchlist();
   
   const { data: featuredContent, isLoading, error } = useQuery<FeaturedContent>({
     queryKey: ['/api/featured'],
   });
   
   const handleAddToWatchlist = async () => {
-    if (!featuredContent?.featured) return;
+    if (!featuredContent?.featured || !watchlistContext) return;
     
     try {
-      await addToWatchlist({
+      await watchlistContext.addToWatchlist({
         mediaType: featuredContent.type!,
         mediaId: featuredContent.featured.id
       });
@@ -50,8 +50,8 @@ const HeroBanner = () => {
     }
   };
   
-  const isInWatchlist = featuredContent?.featured 
-    ? isItemInWatchlist(featuredContent.type!, featuredContent.featured.id) 
+  const isInWatchlist = featuredContent?.featured && watchlistContext
+    ? watchlistContext.isItemInWatchlist(featuredContent.type!, featuredContent.featured.id) 
     : false;
 
   if (isLoading) {
@@ -151,7 +151,7 @@ const HeroBanner = () => {
       {/* Video Player Modal */}
       {showPlayer && (
         <VideoPlayer 
-          contentType={featuredContent.type!} 
+          mediaType={featuredContent.type!} 
           imdbId={featuredContent.featured.imdbId}
           title={featuredContent.featured.title}
           onClose={() => setShowPlayer(false)} 

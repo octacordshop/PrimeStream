@@ -15,7 +15,7 @@ export default function WatchPage() {
   const [match, params] = useRoute('/watch/:mediaType/:id');
   const [activeTab, setActiveTab] = useState<string>('info');
   const { toast } = useToast();
-  const { addToWatchlist, removeFromWatchlist, isItemInWatchlist } = useWatchlist();
+  const watchlistContext = useWatchlist();
   
   // Extract parameters
   const mediaType = params?.mediaType as 'movie' | 'tv';
@@ -28,7 +28,7 @@ export default function WatchPage() {
   const [selectedEpisodeData, setSelectedEpisodeData] = useState<any>(null);
   
   // Check if content is in watchlist
-  const inWatchlist = contentId ? isItemInWatchlist(mediaType, parseInt(contentId)) : false;
+  const inWatchlist = contentId && watchlistContext ? watchlistContext.isItemInWatchlist(mediaType, parseInt(contentId)) : false;
   
   // Fetch content details
   const { data: content, isLoading: contentLoading, error: contentError } = useQuery({
@@ -54,17 +54,17 @@ export default function WatchPage() {
   
   // Handle watchlist toggle
   const handleWatchlistToggle = async () => {
-    if (!content) return;
+    if (!content || !watchlistContext) return;
     
     try {
       if (inWatchlist) {
-        await removeFromWatchlist(mediaType, content.id);
+        await watchlistContext.removeFromWatchlist(mediaType, content.id);
         toast({
           title: 'Removed from watchlist',
           description: `${content.title} has been removed from your watchlist`,
         });
       } else {
-        await addToWatchlist({ mediaType, mediaId: content.id });
+        await watchlistContext.addToWatchlist({ mediaType, mediaId: content.id });
         toast({
           title: 'Added to watchlist',
           description: `${content.title} has been added to your watchlist`,
