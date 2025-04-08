@@ -1,18 +1,15 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useLocation } from 'wouter';
 import { Play, Plus, Check, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWatchlist } from '@/context/WatchlistContext';
 import { useToast } from '@/hooks/use-toast';
-import VideoPlayer from '@/components/common/VideoPlayer';
 import { Skeleton } from '@/components/ui/skeleton';
 import ContentCard from '@/components/home/ContentCard';
 
 const MoviePage = () => {
   const { id } = useParams();
   const [_, setLocation] = useLocation();
-  const [showPlayer, setShowPlayer] = useState(false);
   const { addToWatchlist, removeFromWatchlist, isItemInWatchlist } = useWatchlist();
   const { toast } = useToast();
   
@@ -152,7 +149,7 @@ const MoviePage = () => {
             <div className="flex space-x-4 mb-8">
               <Button 
                 className="bg-prime-blue hover:bg-prime-teal text-white px-8 py-6 rounded flex items-center transition-colors"
-                onClick={() => setShowPlayer(true)}
+                onClick={() => setLocation(`/watch/movie/${movie.id}`)}
               >
                 <Play className="mr-2 h-5 w-5" /> Watch Now
               </Button>
@@ -231,15 +228,6 @@ const MoviePage = () => {
         )}
       </div>
       
-      {/* Video Player Modal */}
-      {showPlayer && (
-        <VideoPlayer 
-          contentType="movie" 
-          imdbId={movie.imdbId}
-          title={movie.title}
-          onClose={() => setShowPlayer(false)} 
-        />
-      )}
     </>
   );
 };

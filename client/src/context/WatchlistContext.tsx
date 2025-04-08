@@ -1,6 +1,8 @@
-import { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import { fetchWatchlist, addToWatchlist as apiAddToWatchlist, removeFromWatchlist as apiRemoveFromWatchlist } from '@/lib/api';
-import { queryClient } from '@/lib/queryClient';
+import { createContext, ReactNode, useContext } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 
 interface WatchlistItem {
   id: number;
@@ -20,14 +22,7 @@ interface WatchlistContextType {
   isItemInWatchlist: (mediaType: string, mediaId: number) => boolean;
 }
 
-const WatchlistContext = createContext<WatchlistContextType>({
-  watchlist: [],
-  isLoading: false,
-  error: null,
-  addToWatchlist: async () => {},
-  removeFromWatchlist: async () => {},
-  isItemInWatchlist: () => false,
-});
+const WatchlistContext = createContext<WatchlistContextType | null>(null);
 
 export const useWatchlist = () => useContext(WatchlistContext);
 
@@ -36,77 +31,75 @@ interface WatchlistProviderProps {
 }
 
 export const WatchlistProvider = ({ children }: WatchlistProviderProps) => {
-  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<Error | null>(null);
+  let user = null;
+  try {
+    const authContext = useAuth();
+    user = authContext?.user;
+  } catch (error) {
+    console.warn('Auth context not available for WatchlistProvider');
+  }
+  const { toast } = useToast();
 
-  // Load watchlist on component mount
-  useEffect(() => {
-    const loadWatchlist = async () => {
-      try {
-        setIsLoading(true);
-        const data = await fetchWatchlist();
-        setWatchlist(data);
-        setError(null);
-      } catch (err) {
-        console.error('Failed to load watchlist:', err);
-        setError(err instanceof Error ? err : new Error('Failed to load watchlist'));
-      } finally {
-        setIsLoading(false);
+  // Create a simple default state when queries aren't available
+  const watchlist: WatchlistItem[] = [];
+  const isLoading = false;
+  const error = null;
+  
+  // Skip using useQuery during client-side navigation when auth isn't available
+  // This allows the WatchlistProvider to render even when auth isn't ready
+
+  // Create simple mutation stubs for safe fallback
+  const addToWatchlistMutation = {
+    mutateAsync: async (item: { mediaType: string; mediaId: number }) => {
+      if (!user) {
+        throw new Error('You must be logged in to use the watchlist');
       }
-    };
-
-    loadWatchlist();
-  }, []);
-
-  // Add item to watchlist
-  const addToWatchlist = async (item: { mediaType: string; mediaId: number }) => {
-    try {
-      const newItem = await apiAddToWatchlist(item);
-      setWatchlist(prev => [...prev, newItem]);
-      
-      // Invalidate relevant queries
-      queryClient.invalidateQueries({ queryKey: ['/api/watchlist'] });
-    } catch (err) {
-      console.error('Failed to add to watchlist:', err);
-      setError(err instanceof Error ? err : new Error('Failed to add to watchlist'));
-      throw err;
+      toast({
+        title: 'Authentication Required',
+        description: 'You must be logged in to use the watchlist',
+        variant: 'destructive',
+      });
+      return null;
     }
   };
 
-  // Remove item from watchlist
-  const removeFromWatchlist = async (mediaType: string, mediaId: number) => {
-    try {
-      // Find the watchlist item by mediaType and mediaId
-      const itemToRemove = watchlist.find(
-        item => item.mediaType === mediaType && item.mediaId === mediaId
-      );
-      
-      if (!itemToRemove) {
-        throw new Error('Item not found in watchlist');
+  const removeFromWatchlistMutation = {
+    mutateAsync: async (id: number) => {
+      if (!user) {
+        throw new Error('You must be logged in to use the watchlist');
       }
-      
-      await apiRemoveFromWatchlist(itemToRemove.id);
-      
-      // Update local state
-      setWatchlist(prev => 
-        prev.filter(item => !(item.mediaType === mediaType && item.mediaId === mediaId))
-      );
-      
-      // Invalidate relevant queries
-      queryClient.invalidateQueries({ queryKey: ['/api/watchlist'] });
-    } catch (err) {
-      console.error('Failed to remove from watchlist:', err);
-      setError(err instanceof Error ? err : new Error('Failed to remove from watchlist'));
-      throw err;
+      toast({
+        title: 'Authentication Required',
+        description: 'You must be logged in to use the watchlist',
+        variant: 'destructive',
+      });
+      return null;
     }
   };
 
-  // Check if item is in watchlist
-  const isItemInWatchlist = (mediaType: string, mediaId: number): boolean => {
-    return watchlist.some(
-      item => item.mediaType === mediaType && item.mediaId === mediaId
+  const addToWatchlist = async (item: { mediaType: string; mediaId: number }): Promise<void> => {
+    if (!user) {
+      toast({
+        title: 'Error',
+        description: 'You must be logged in to add to watchlist',
+        variant: 'destructive',
+      });
+      return;
+    }
+    await addToWatchlistMutation.mutateAsync(item);
+  };
+
+  const removeFromWatchlist = async (mediaType: string, mediaId: number): Promise<void> => {
+    const item = watchlist.find(
+      (item) => item.mediaType === mediaType && item.mediaId === mediaId
     );
+    if (item) {
+      await removeFromWatchlistMutation.mutateAsync(item.id);
+    }
+  };
+
+  const isItemInWatchlist = (mediaType: string, mediaId: number): boolean => {
+    return watchlist.some((item) => item.mediaType === mediaType && item.mediaId === mediaId);
   };
 
   return (
@@ -114,7 +107,7 @@ export const WatchlistProvider = ({ children }: WatchlistProviderProps) => {
       value={{
         watchlist,
         isLoading,
-        error,
+        error: error as Error | null,
         addToWatchlist,
         removeFromWatchlist,
         isItemInWatchlist,

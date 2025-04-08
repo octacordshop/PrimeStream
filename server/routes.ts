@@ -351,7 +351,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update progress of recently watched item
-  app.patch("/api/recently-watched/:id/progress", async (req, res) => {
+  app.patch("/api/recently-watched/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       if (isNaN(id)) {

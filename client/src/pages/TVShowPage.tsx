@@ -6,21 +6,13 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useWatchlist } from '@/context/WatchlistContext';
 import { useToast } from '@/hooks/use-toast';
-import VideoPlayer from '@/components/common/VideoPlayer';
 import { Skeleton } from '@/components/ui/skeleton';
 import ContentCard from '@/components/home/ContentCard';
 
 const TVShowPage = () => {
   const { id } = useParams();
   const [_, setLocation] = useLocation();
-  const [showPlayer, setShowPlayer] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState<number>(1);
-  const [selectedEpisode, setSelectedEpisode] = useState<{
-    id: number;
-    season: number;
-    episode: number;
-    title: string;
-  } | null>(null);
   
   const { addToWatchlist, removeFromWatchlist, isItemInWatchlist } = useWatchlist();
   const { toast } = useToast();
@@ -76,14 +68,18 @@ const TVShowPage = () => {
   
   // Handle play button for entire show
   const handlePlayShow = () => {
-    setSelectedEpisode(null);
-    setShowPlayer(true);
+    // Redirect to watch page for the first episode
+    if (episodes && episodes.length > 0) {
+      const firstEpisode = episodes[0];
+      setLocation(`/watch/tv/${tvShow.id}?season=${firstEpisode.season}&episode=${firstEpisode.episode}&episodeId=${firstEpisode.id}`);
+    } else {
+      setLocation(`/watch/tv/${tvShow.id}`);
+    }
   };
   
   // Handle play button for specific episode
   const handlePlayEpisode = (episode: any) => {
-    setSelectedEpisode(episode);
-    setShowPlayer(true);
+    setLocation(`/watch/tv/${tvShow.id}?season=${episode.season}&episode=${episode.episode}&episodeId=${episode.id}`);
   };
   
   // Fetch similar shows (for demo, we'll just use the latest shows)
@@ -346,19 +342,6 @@ const TVShowPage = () => {
           </div>
         )}
       </div>
-      
-      {/* Video Player Modal */}
-      {showPlayer && (
-        <VideoPlayer 
-          contentType="tv" 
-          imdbId={tvShow.imdbId}
-          title={tvShow.title}
-          season={selectedEpisode?.season}
-          episode={selectedEpisode?.episode}
-          episodeId={selectedEpisode?.id}
-          onClose={() => setShowPlayer(false)} 
-        />
-      )}
     </>
   );
 };

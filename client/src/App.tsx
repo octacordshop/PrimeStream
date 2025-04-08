@@ -12,16 +12,25 @@ import TVShowPage from "@/pages/TVShowPage";
 import MyListPage from "@/pages/MyListPage";
 import SearchPage from "@/pages/SearchPage";
 import AdminPage from "@/pages/AdminPage";
+import WatchPage from "@/pages/WatchPage";
 import AuthPage from "@/pages/auth-page";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { useEffect } from "react";
+import { RecentlyWatchedProvider } from "@/context/RecentlyWatchedContext";
+import { WatchlistProvider } from "@/context/WatchlistContext";
 
 function Router() {
   return (
     <div className="flex flex-col min-h-screen bg-prime-dark text-white">
       <Switch>
         <Route path="/auth" component={AuthPage} />
+        <Route path="/watch/:mediaType/:id">
+          {/* Watch page doesn't have header/footer for fullscreen viewing */}
+          <main className="min-h-screen bg-black">
+            <WatchPage />
+          </main>
+        </Route>
         <Route path="*">
           <div className="flex flex-col min-h-screen bg-prime-dark text-white">
             <Header />
@@ -76,8 +85,12 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Router />
-        <Toaster />
+        <WatchlistProvider>
+          <RecentlyWatchedProvider>
+            <Router />
+            <Toaster />
+          </RecentlyWatchedProvider>
+        </WatchlistProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

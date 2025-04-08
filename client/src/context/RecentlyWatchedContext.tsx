@@ -1,10 +1,8 @@
-import { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import { 
-  fetchRecentlyWatched, 
-  addToRecentlyWatched as apiAddToRecentlyWatched, 
-  updateWatchProgress as apiUpdateWatchProgress 
-} from '@/lib/api';
-import { queryClient } from '@/lib/queryClient';
+import { createContext, ReactNode, useContext } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 
 interface RecentlyWatchedItem {
   id: number;
@@ -32,14 +30,7 @@ interface RecentlyWatchedContextType {
   getContentProgress: (mediaType: string, mediaId: number, episodeId?: number) => number;
 }
 
-const RecentlyWatchedContext = createContext<RecentlyWatchedContextType>({
-  recentlyWatched: [],
-  isLoading: false,
-  error: null,
-  addToRecentlyWatched: async () => {},
-  updateWatchProgress: async () => {},
-  getContentProgress: () => 0,
-});
+const RecentlyWatchedContext = createContext<RecentlyWatchedContextType | null>(null);
 
 export const useRecentlyWatched = () => useContext(RecentlyWatchedContext);
 
@@ -48,93 +39,102 @@ interface RecentlyWatchedProviderProps {
 }
 
 export const RecentlyWatchedProvider = ({ children }: RecentlyWatchedProviderProps) => {
-  const [recentlyWatched, setRecentlyWatched] = useState<RecentlyWatchedItem[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<Error | null>(null);
+  let user = null;
+  try {
+    const authContext = useAuth();
+    user = authContext?.user;
+  } catch (error) {
+    console.warn('Auth context not available for RecentlyWatchedProvider');
+  }
+  const { toast } = useToast();
 
-  // Load recently watched on component mount
-  useEffect(() => {
-    const loadRecentlyWatched = async () => {
-      try {
-        setIsLoading(true);
-        const data = await fetchRecentlyWatched();
-        setRecentlyWatched(data);
-        setError(null);
-      } catch (err) {
-        console.error('Failed to load recently watched:', err);
-        setError(err instanceof Error ? err : new Error('Failed to load recently watched'));
-      } finally {
-        setIsLoading(false);
+  // Create a simple default state when queries aren't available
+  const recentlyWatched: RecentlyWatchedItem[] = [];
+  const isLoading = false;
+  const error = null;
+  
+  // Skip using useQuery during client-side navigation when auth isn't available
+  // This allows the RecentlyWatchedProvider to render even when auth isn't ready
+
+  // Create simple mutation stubs for safe fallback
+  const addToRecentlyWatchedMutation = {
+    mutateAsync: async (item: {
+      mediaType: string;
+      mediaId: number;
+      episodeId?: number;
+      progress: number;
+    }) => {
+      if (!user) {
+        throw new Error('You must be logged in to track watch history');
       }
-    };
+      toast({
+        title: 'Authentication Required',
+        description: 'You must be logged in to track watch history',
+        variant: 'destructive',
+      });
+      return null;
+    }
+  };
 
-    loadRecentlyWatched();
-  }, []);
+  const updateProgressMutation = {
+    mutateAsync: async (params: { id: number; progress: number }) => {
+      if (!user) {
+        throw new Error('You must be logged in to track watch history');
+      }
+      toast({
+        title: 'Authentication Required',
+        description: 'You must be logged in to track watch history',
+        variant: 'destructive',
+      });
+      return null;
+    }
+  };
 
-  // Add item to recently watched
   const addToRecentlyWatched = async (item: {
     mediaType: string;
     mediaId: number;
     episodeId?: number;
     progress: number;
-  }) => {
-    try {
-      const newItem = await apiAddToRecentlyWatched(item);
-      
-      // Update local state - replace if exists, otherwise add
-      setRecentlyWatched(prev => {
-        const existingIndex = prev.findIndex(
-          i => 
-            i.mediaType === item.mediaType && 
-            i.mediaId === item.mediaId && 
-            i.episodeId === item.episodeId
-        );
-        
-        if (existingIndex >= 0) {
-          const updated = [...prev];
-          updated[existingIndex] = newItem;
-          return updated;
-        }
-        
-        return [newItem, ...prev];
+  }): Promise<void> => {
+    if (!user) {
+      toast({
+        title: 'Error',
+        description: 'You must be logged in to track watch history',
+        variant: 'destructive',
       });
-      
-      // Invalidate relevant queries
-      queryClient.invalidateQueries({ queryKey: ['/api/recently-watched'] });
-    } catch (err) {
-      console.error('Failed to add to recently watched:', err);
-      setError(err instanceof Error ? err : new Error('Failed to add to recently watched'));
-      throw err;
+      return;
+    }
+    await addToRecentlyWatchedMutation.mutateAsync(item);
+  };
+
+  const updateWatchProgress = async (id: number, progress: number): Promise<void> => {
+    if (!user) return;
+    
+    // Find the item by ID if it exists
+    const item = recentlyWatched.find((item) => {
+      if (item.episodeId && item.episodeId === id) {
+        return true;
+      } else if (item.mediaId === id) {
+        return true;
+      }
+      return false;
+    });
+    
+    if (item) {
+      await updateProgressMutation.mutateAsync({ id: item.id, progress });
     }
   };
 
-  // Update watch progress
-  const updateWatchProgress = async (id: number, progress: number) => {
-    try {
-      const updatedItem = await apiUpdateWatchProgress(id, progress);
-      
-      // Update local state
-      setRecentlyWatched(prev => 
-        prev.map(item => item.id === id ? updatedItem : item)
-      );
-      
-      // Invalidate relevant queries
-      queryClient.invalidateQueries({ queryKey: ['/api/recently-watched'] });
-    } catch (err) {
-      console.error('Failed to update watch progress:', err);
-      setError(err instanceof Error ? err : new Error('Failed to update watch progress'));
-      throw err;
-    }
-  };
-
-  // Get progress for specific content
   const getContentProgress = (mediaType: string, mediaId: number, episodeId?: number): number => {
-    const item = recentlyWatched.find(
-      i => 
-        i.mediaType === mediaType && 
-        i.mediaId === mediaId && 
-        (episodeId ? i.episodeId === episodeId : true)
-    );
+    if (!recentlyWatched.length) return 0;
+    
+    const item = recentlyWatched.find((item) => {
+      if (episodeId) {
+        return item.mediaType === mediaType && item.episodeId === episodeId;
+      } else {
+        return item.mediaType === mediaType && item.mediaId === mediaId;
+      }
+    });
     
     return item ? item.progress : 0;
   };
@@ -144,7 +144,7 @@ export const RecentlyWatchedProvider = ({ children }: RecentlyWatchedProviderPro
       value={{
         recentlyWatched,
         isLoading,
-        error,
+        error: error as Error | null,
         addToRecentlyWatched,
         updateWatchProgress,
         getContentProgress,

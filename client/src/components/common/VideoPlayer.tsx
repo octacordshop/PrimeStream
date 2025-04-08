@@ -1,205 +1,276 @@
-import { useEffect, useState } from 'react';
-import { X, Languages } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useState, useEffect } from 'react';
+import { Loader2, Volume2, VolumeX, Maximize, SkipForward, Settings } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRecentlyWatched } from '@/context/RecentlyWatchedContext';
-import { useToast } from '@/hooks/use-toast';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useQuery } from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
 
 interface VideoPlayerProps {
-  contentType: 'movie' | 'tv';
+  mediaType: 'movie' | 'tv';
   imdbId: string;
   title: string;
   season?: number;
   episode?: number;
   episodeId?: number;
-  onClose: () => void;
+  onClose?: () => void;
+  autoPlay?: boolean;
 }
 
-// Language names mapping
-const languageNames: Record<string, string> = {
-  'en': 'English',
-  'es': 'Spanish',
-  'fr': 'French',
-  'de': 'German',
-  'it': 'Italian',
-  'pt': 'Portuguese',
-  'ja': 'Japanese',
-  'ko': 'Korean',
-  'zh': 'Chinese',
-  'ar': 'Arabic',
-  'hi': 'Hindi',
-  'ru': 'Russian'
-};
-
-const VideoPlayer = ({
-  contentType,
+export default function VideoPlayer({
+  mediaType,
   imdbId,
   title,
-  season,
-  episode,
+  season = 1,
+  episode = 1,
   episodeId,
-  onClose
-}: VideoPlayerProps) => {
-  const [iframeLoaded, setIframeLoaded] = useState(false);
-  const [selectedSubtitle, setSelectedSubtitle] = useState<string | null>(null);
-  const { addToRecentlyWatched } = useRecentlyWatched();
-  const { toast } = useToast();
+  onClose,
+  autoPlay = true
+}: VideoPlayerProps) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [subtitles, setSubtitles] = useState<string[]>([]);
+  const [selectedSubtitle, setSelectedSubtitle] = useState<string>('off');
+  const [muted, setMuted] = useState(false);
+  const [playerReady, setPlayerReady] = useState(false);
+  const { addToRecentlyWatched, updateWatchProgress, getContentProgress } = useRecentlyWatched();
   
-  // Fetch available subtitles
-  const { data: availableSubtitles = [] } = useQuery({
-    queryKey: ['/api/subtitles', contentType, imdbId],
-    queryFn: async () => {
-      try {
-        const response = await fetch(`/api/subtitles/${contentType}/${imdbId}`);
-        if (!response.ok) return [];
-        return await response.json();
-      } catch (error) {
-        console.error('Error fetching subtitles:', error);
-        return [];
-      }
-    },
-    enabled: !!imdbId
-  });
+  // Get initial progress
+  const initialProgress = getContentProgress(mediaType, parseInt(imdbId.replace('tt', '')), episodeId);
   
-  // Construct the embed URL based on content type and parameters
-  const getEmbedUrl = () => {
-    let baseUrl = contentType === 'movie' 
-      ? `https://vidsrc.me/embed/movie?imdb=${imdbId}` 
-      : `https://vidsrc.me/embed/tv?imdb=${imdbId}`;
-    
-    // Add season and episode parameters if provided
-    if (contentType === 'tv' && season && episode) {
-      baseUrl += `&season=${season}&episode=${episode}`;
-    }
-    
-    // Add subtitle parameter if selected
-    if (selectedSubtitle) {
-      baseUrl += `&ds_lang=${selectedSubtitle}`;
-    }
-    
-    return baseUrl;
-  };
+  // Store progress in state
+  const [progress, setProgress] = useState(initialProgress);
   
-  // Track content in recently watched when played
+  // Track playback progress
   useEffect(() => {
-    const saveToRecentlyWatched = async () => {
+    if (!playerReady) return;
+    
+    const intervalId = setInterval(() => {
+      // Update progress every 5 seconds
+      const videoElement = document.querySelector('iframe')?.contentWindow?.document.querySelector('video');
+      if (videoElement) {
+        const currentTime = videoElement.currentTime;
+        const duration = videoElement.duration;
+        
+        if (currentTime && duration) {
+          const progressPercent = Math.floor((currentTime / duration) * 100);
+          setProgress(progressPercent);
+          
+          // Save progress to backend
+          if (mediaType === 'movie') {
+            updateWatchProgress(episodeId || 0, progressPercent);
+          } else {
+            updateWatchProgress(episodeId || 0, progressPercent);
+          }
+        }
+      }
+    }, 5000);
+    
+    return () => clearInterval(intervalId);
+  }, [playerReady, episodeId, mediaType, updateWatchProgress]);
+  
+  // Add to recently watched
+  useEffect(() => {
+    const addToHistory = async () => {
       try {
         await addToRecentlyWatched({
-          mediaType: contentType,
+          mediaType,
           mediaId: parseInt(imdbId.replace('tt', '')),
           episodeId: episodeId,
           progress: 0
         });
       } catch (error) {
-        console.error('Failed to add to recently watched:', error);
+        console.error('Failed to add to watch history:', error);
       }
     };
     
-    // Add a slight delay to ensure we only track views when content is actually watched
-    const timer = setTimeout(saveToRecentlyWatched, 5000);
-    
-    return () => clearTimeout(timer);
-  }, [contentType, imdbId, episodeId, addToRecentlyWatched]);
+    addToHistory();
+  }, [mediaType, imdbId, episodeId, addToRecentlyWatched]);
   
-  // Handle keyboard events (ESC to close)
+  // Fetch available subtitles
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
+    const fetchSubtitles = async () => {
+      try {
+        const response = await fetch(`/api/subtitles/${mediaType}/${imdbId}`);
+        if (!response.ok) throw new Error('Failed to fetch subtitles');
+        
+        const subtitleData = await response.json();
+        setSubtitles(subtitleData);
+      } catch (err) {
+        console.error('Error fetching subtitles:', err);
       }
     };
     
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+    fetchSubtitles();
+  }, [mediaType, imdbId]);
   
-  // Prevent scrolling of the background content
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = 'auto';
-    };
-  }, []);
+  // Create Vidsrc URL
+  const vidsrcUrl = mediaType === 'movie'
+    ? `https://vidsrc.to/embed/movie/${imdbId}`
+    : `https://vidsrc.to/embed/tv/${imdbId}/${season}/${episode}`;
   
-  const handleIframeError = () => {
-    toast({
-      title: "Playback Error",
-      description: "Unable to load the video. Please try again later.",
-      variant: "destructive"
-    });
-    
-    setIframeLoaded(false);
+  // Handle iframe load
+  const handleIframeLoad = () => {
+    setLoading(false);
+    setPlayerReady(true);
   };
-
+  
+  // Handle iframe error
+  const handleIframeError = () => {
+    setLoading(false);
+    setError('Failed to load video player. Please try again later.');
+  };
+  
+  // Enter fullscreen
+  const enterFullscreen = () => {
+    const iframe = document.querySelector('iframe');
+    if (iframe) {
+      if (iframe.requestFullscreen) {
+        iframe.requestFullscreen();
+      }
+    }
+  };
+  
+  // Toggle mute
+  const toggleMute = () => {
+    const videoElement = document.querySelector('iframe')?.contentWindow?.document.querySelector('video');
+    if (videoElement) {
+      videoElement.muted = !videoElement.muted;
+      setMuted(!muted);
+    }
+  };
+  
+  // Skip intro (jump forward 90 seconds)
+  const skipIntro = () => {
+    const videoElement = document.querySelector('iframe')?.contentWindow?.document.querySelector('video');
+    if (videoElement) {
+      videoElement.currentTime += 90;
+    }
+  };
+  
+  // Handle subtitle change
+  const handleSubtitleChange = (value: string) => {
+    setSelectedSubtitle(value);
+    
+    const iframe = document.querySelector('iframe');
+    if (iframe && iframe.contentWindow) {
+      // Try to communicate with the iframe to change subtitles
+      // Note: This may not work due to cross-origin restrictions
+      try {
+        iframe.contentWindow.postMessage({
+          type: 'subtitle',
+          value: value === 'off' ? null : value
+        }, '*');
+      } catch (err) {
+        console.error('Failed to set subtitles:', err);
+      }
+    }
+  };
+  
   return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black" onClick={onClose}></div>
+    <div className="relative w-full aspect-video max-h-[80vh] bg-black">
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <span className="ml-2 text-lg">Loading player...</span>
+        </div>
+      )}
       
-      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-        {availableSubtitles.length > 0 && (
-          <div className="relative bg-black/50 rounded-md p-1 flex items-center">
-            <Languages className="h-4 w-4 text-white mr-1" />
-            <Select 
-              value={selectedSubtitle || ""} 
-              onValueChange={(value) => {
-                if (value) {
-                  setSelectedSubtitle(value);
-                  setIframeLoaded(false); // Reload iframe when subtitle changes
-                } else {
-                  setSelectedSubtitle(null);
-                }
-              }}
-            >
-              <SelectTrigger className="bg-transparent border-0 text-white h-8 w-28 focus:ring-0">
-                <SelectValue placeholder="Subtitles" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="" className="cursor-pointer">None</SelectItem>
-                {availableSubtitles.map((lang: string) => (
-                  <SelectItem key={lang} value={lang} className="cursor-pointer">
-                    {languageNames[lang] || lang}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-        
-        <Button 
-          variant="ghost"
-          size="icon"
-          className="bg-black/50 text-white p-2 rounded-full hover:bg-black/80 transition-colors" 
-          onClick={onClose}
-        >
-          <X className="h-5 w-5" />
-        </Button>
-      </div>
+      {error && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-10">
+          <p className="text-red-500 text-lg mb-4">{error}</p>
+          <Button onClick={onClose}>Go Back</Button>
+        </div>
+      )}
       
-      <div className="relative h-full flex items-center justify-center">
-        {!iframeLoaded && (
-          <div className="absolute inset-0 flex items-center justify-center bg-prime-dark-light">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-prime-blue mb-4"></div>
-              <h3 className="text-white text-xl mb-2">Loading player...</h3>
-              <p className="text-prime-gray max-w-md mx-auto">
-                Getting ready to play: {title}
-              </p>
-            </div>
-          </div>
-        )}
+      <iframe 
+        src={vidsrcUrl}
+        className="w-full h-full"
+        allowFullScreen
+        onLoad={handleIframeLoad}
+        onError={handleIframeError}
+      />
+      
+      {/* Custom controls overlay */}
+      <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent z-20 flex items-center justify-between opacity-0 hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-4">
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={toggleMute}
+            className="text-white hover:bg-white/20"
+          >
+            {muted ? <VolumeX /> : <Volume2 />}
+          </Button>
+          
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={skipIntro}
+            className="text-white hover:bg-white/20 flex items-center gap-1"
+          >
+            <SkipForward size={16} />
+            <span>Skip Intro</span>
+          </Button>
+        </div>
         
-        <iframe
-          src={getEmbedUrl()}
-          className="w-full h-full max-w-6xl max-h-[80vh]"
-          allowFullScreen
-          title={title}
-          onLoad={() => setIframeLoaded(true)}
-          onError={handleIframeError}
-        ></iframe>
+        <div className="flex items-center gap-4">
+          {/* Subtitles selection */}
+          <Select value={selectedSubtitle} onValueChange={handleSubtitleChange}>
+            <SelectTrigger className="w-[140px] bg-black/50 border-none text-white">
+              <Settings size={16} className="mr-2" />
+              <SelectValue placeholder="Subtitles" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="off">Off</SelectItem>
+              {subtitles.map((lang) => (
+                <SelectItem key={lang} value={lang}>
+                  {getLanguageName(lang)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={enterFullscreen}
+            className="text-white hover:bg-white/20"
+          >
+            <Maximize />
+          </Button>
+        </div>
       </div>
     </div>
   );
-};
+}
 
-export default VideoPlayer;
+// Helper to convert language codes to names
+function getLanguageName(code: string): string {
+  const languages: Record<string, string> = {
+    en: 'English',
+    es: 'Spanish',
+    fr: 'French',
+    de: 'German',
+    it: 'Italian',
+    pt: 'Portuguese',
+    ru: 'Russian',
+    ja: 'Japanese',
+    ko: 'Korean',
+    zh: 'Chinese',
+    ar: 'Arabic',
+    hi: 'Hindi',
+    tr: 'Turkish',
+    nl: 'Dutch',
+    pl: 'Polish',
+    sv: 'Swedish',
+    da: 'Danish',
+    fi: 'Finnish',
+    no: 'Norwegian',
+    cs: 'Czech',
+    th: 'Thai',
+    vi: 'Vietnamese',
+    ms: 'Malay',
+    id: 'Indonesian'
+  };
+  
+  return languages[code] || code.toUpperCase();
+}
