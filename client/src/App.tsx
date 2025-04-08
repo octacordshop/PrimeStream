@@ -14,6 +14,7 @@ import SearchPage from "@/pages/SearchPage";
 import AdminPage from "@/pages/AdminPage";
 import WatchPage from "@/pages/WatchPage";
 import AuthPage from "@/pages/auth-page";
+import UserProfilePage from "@/pages/UserProfilePage";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { useEffect } from "react";
@@ -41,6 +42,7 @@ function Router() {
                 <ProtectedRoute path="/show/:id" component={TVShowPage} />
                 <ProtectedRoute path="/my-list" component={MyListPage} />
                 <ProtectedRoute path="/search" component={SearchPage} />
+                <ProtectedRoute path="/profile" component={UserProfilePage} />
                 <AdminProtectedRoute path="/admin" component={AdminPage} />
                 <Route component={NotFound} />
               </Switch>

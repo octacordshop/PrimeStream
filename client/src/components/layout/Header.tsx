@@ -147,7 +147,10 @@ const Header = () => {
                 <DropdownMenuContent align="end" className="w-56 bg-prime-dark border-prime-dark-light">
                   <DropdownMenuLabel className="text-white">My Account</DropdownMenuLabel>
                   <DropdownMenuSeparator className="bg-prime-dark-light" />
-                  <DropdownMenuItem className="text-white focus:bg-prime-dark-light cursor-pointer">
+                  <DropdownMenuItem 
+                    onClick={() => setLocation('/profile')}
+                    className="text-white focus:bg-prime-dark-light cursor-pointer"
+                  >
                     <User className="mr-2 h-4 w-4" />
                     <span>Profile</span>
                   </DropdownMenuItem>
@@ -234,6 +237,16 @@ const Header = () => {
                   My List
                 </a>
               </Link>
+              {user && (
+                <Link href="/profile">
+                  <a 
+                    className={`transition flex items-center gap-1 ${location === '/profile' ? 'text-white' : 'text-prime-gray'}`}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <User className="h-4 w-4" /> Profile
+                  </a>
+                </Link>
+              )}
               {user?.isAdmin && (
                 <Link href="/admin">
                   <a 

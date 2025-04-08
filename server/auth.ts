@@ -114,4 +114,63 @@ export function setupAuth(app: Express) {
     const { password, ...userWithoutPassword } = req.user as Express.User;
     res.json(userWithoutPassword);
   });
+
+  // Get user profile with activity data
+  app.get("/api/user/profile", async (req, res) => {
+    try {
+      if (!req.isAuthenticated()) return res.status(401).json({ error: "Not authenticated" });
+      
+      const user = req.user as Express.User;
+      // Don't send password back
+      const { password, ...userWithoutPassword } = user;
+      
+      // Get user's watchlist count
+      const watchlist = await storage.getWatchlist(user.id);
+      
+      // Get user's recently watched items
+      const recentlyWatched = await storage.getRecentlyWatched(user.id, 10);
+      
+      // Get actual content for the recently watched items
+      const enrichedHistory = await Promise.all(
+        recentlyWatched.map(async (item) => {
+          let content;
+          let episode;
+          
+          if (item.mediaType === "movie") {
+            content = await storage.getMovie(item.mediaId);
+          } else if (item.mediaType === "tv") {
+            content = await storage.getTVShow(item.mediaId);
+            if (item.episodeId) {
+              episode = await storage.getEpisode(item.episodeId);
+            }
+          }
+          
+          return {
+            ...item,
+            content,
+            episode
+          };
+        })
+      );
+      
+      // Get user's watching statistics
+      const watchedMovies = recentlyWatched.filter(item => item.mediaType === "movie").length;
+      const watchedEpisodes = recentlyWatched.filter(item => item.mediaType === "tv").length;
+      
+      // Return user profile with activity data
+      res.json({
+        user: userWithoutPassword,
+        stats: {
+          watchlistCount: watchlist.length,
+          watchedMovies,
+          watchedEpisodes,
+          totalWatched: watchedMovies + watchedEpisodes
+        },
+        recentlyWatched: enrichedHistory
+      });
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+      res.status(500).json({ error: "Failed to fetch user profile" });
+    }
+  });
 }

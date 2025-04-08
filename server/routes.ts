@@ -31,10 +31,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get featured content for home page
   app.get("/api/featured", async (req, res) => {
     try {
-      const featuredMovie = await storage.getFeaturedMovies(1);
+      // Check both featured movies and TV shows
+      const featuredMovies = await storage.getFeaturedMovies(1);
+      const featuredTVShows = await storage.getFeaturedTVShows(1);
       
-      if (featuredMovie.length === 0) {
-        // If no featured content, get the latest movie or show
+      // Prioritize featured TV shows if available (since they were likely set most recently)
+      if (featuredTVShows.length > 0) {
+        res.json({ featured: featuredTVShows[0], type: "tv" });
+      } 
+      // Then check for featured movies
+      else if (featuredMovies.length > 0) {
+        res.json({ featured: featuredMovies[0], type: "movie" });
+      } 
+      // If no featured content, get the latest movie or show as fallback
+      else {
         const movies = await storage.getMovies(1);
         if (movies.length > 0) {
           res.json({ featured: movies[0], type: "movie" });
@@ -46,8 +56,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             res.json({ featured: null, type: null });
           }
         }
-      } else {
-        res.json({ featured: featuredMovie[0], type: "movie" });
       }
     } catch (error) {
       console.error("Error fetching featured content:", error);
@@ -55,12 +63,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get latest movies
+  // Get latest movies with optional genre filter
   app.get("/api/movies/latest", async (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string) || 20;
       const offset = parseInt(req.query.offset as string) || 0;
-      const movies = await storage.getMovies(limit, offset);
+      const genre = req.query.genre as string;
+      
+      let movies = await storage.getMovies(limit, offset);
+      
+      // If genre is specified, filter movies by genre
+      if (genre) {
+        movies = movies.filter(movie => {
+          if (!movie.genre) return false;
+          // Split the genre string and check if it includes the requested genre
+          const genres = movie.genre.split(',').map(g => g.trim().toLowerCase());
+          return genres.includes(genre.toLowerCase());
+        });
+      }
+      
       res.json(movies);
     } catch (error) {
       console.error("Error fetching latest movies:", error);
@@ -105,12 +126,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get latest TV shows
+  // Get latest TV shows with optional genre filter
   app.get("/api/tvshows/latest", async (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string) || 20;
       const offset = parseInt(req.query.offset as string) || 0;
-      const shows = await storage.getTVShows(limit, offset);
+      const genre = req.query.genre as string;
+      
+      let shows = await storage.getTVShows(limit, offset);
+      
+      // If genre is specified, filter shows by genre
+      if (genre) {
+        shows = shows.filter(show => {
+          if (!show.genre) return false;
+          // Split the genre string and check if it includes the requested genre
+          const genres = show.genre.split(',').map(g => g.trim().toLowerCase());
+          return genres.includes(genre.toLowerCase());
+        });
+      }
+      
       res.json(shows);
     } catch (error) {
       console.error("Error fetching latest TV shows:", error);
@@ -925,6 +959,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   // --- Hero Content and Settings Endpoints ---
+  
+  // Bulk feature content
+  app.post("/api/admin/feature/bulk", async (req, res) => {
+    try {
+      const { type, ids, featured } = req.body;
+      
+      if (!type || !ids || !Array.isArray(ids) || ids.length === 0 || featured === undefined) {
+        return res.status(400).json({ message: "Invalid feature data" });
+      }
+      
+      if (!["movie", "tv"].includes(type)) {
+        return res.status(400).json({ message: "Type must be either 'movie' or 'tv'" });
+      }
+      
+      const updatedItems = [];
+      
+      if (type === "movie") {
+        for (const id of ids) {
+          try {
+            const movie = await storage.updateMovie(id, { isFeatured: featured });
+            if (movie) {
+              updatedItems.push(movie);
+            }
+          } catch (err) {
+            console.error(`Error updating movie ${id}:`, err);
+          }
+        }
+      } else {
+        for (const id of ids) {
+          try {
+            const tvShow = await storage.updateTVShow(id, { isFeatured: featured });
+            if (tvShow) {
+              updatedItems.push(tvShow);
+            }
+          } catch (err) {
+            console.error(`Error updating TV show ${id}:`, err);
+          }
+        }
+      }
+      
+      res.json({ 
+        message: `${featured ? 'Featured' : 'Unfeatured'} ${updatedItems.length} items successfully`,
+        updatedItems 
+      });
+    } catch (error) {
+      console.error("Error bulk featuring content:", error);
+      res.status(500).json({ message: "Failed to bulk update featured status" });
+    }
+  });
   
   // Set hero content
   app.post("/api/admin/hero", async (req, res) => {
