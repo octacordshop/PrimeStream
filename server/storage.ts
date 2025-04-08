@@ -1,5 +1,6 @@
 import { eq, and, like, desc, sql } from 'drizzle-orm';
 import { db } from './db';
+import { pool } from './db';
 import { 
   users, movies, tvShows, episodes, watchlist, recentlyWatched, apiCache,
   type User, type InsertUser,
@@ -10,8 +11,13 @@ import {
   type RecentlyWatched, type InsertRecentlyWatched,
   type ApiCache, type InsertApiCache
 } from '@shared/schema';
+import session from "express-session";
+import connectPg from "connect-pg-simple";
 
 export interface IStorage {
+  // Session store
+  sessionStore: any; // Using any for session store to avoid type issues
+
   // User operations
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -64,6 +70,19 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  // Session store
+  sessionStore: any; // Using any for session store to avoid type issues
+
+  constructor() {
+    const PostgresSessionStore = connectPg(session);
+    
+    this.sessionStore = new PostgresSessionStore({
+      pool,
+      createTableIfMissing: true,
+      tableName: 'sessions'
+    });
+  }
+
   // User operations
   async getUser(id: number): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));

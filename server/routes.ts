@@ -8,6 +8,7 @@ import {
   insertWatchlistSchema, insertRecentlyWatchedSchema
 } from "@shared/schema";
 import * as tmdbApi from "./tmdb-api";
+import { setupAuth } from "./auth";
 
 // Helper to safely parse JSON
 const safeJsonParse = (text: string) => {
@@ -20,6 +21,9 @@ const safeJsonParse = (text: string) => {
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Set up authentication
+  setupAuth(app);
+  
   const httpServer = createServer(app);
 
   // --- Content Endpoints ---

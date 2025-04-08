@@ -155,9 +155,9 @@ const VideoPlayer = ({
                 <SelectValue placeholder="Subtitles" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">None</SelectItem>
+                <SelectItem value="" className="cursor-pointer">None</SelectItem>
                 {availableSubtitles.map((lang: string) => (
-                  <SelectItem key={lang} value={lang}>
+                  <SelectItem key={lang} value={lang} className="cursor-pointer">
                     {languageNames[lang] || lang}
                   </SelectItem>
                 ))}

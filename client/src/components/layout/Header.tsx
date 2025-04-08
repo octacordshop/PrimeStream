@@ -4,11 +4,21 @@ import {
   Search, 
   User, 
   Menu, 
-  X 
+  X,
+  LogOut 
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const Header = () => {
   const [location, setLocation] = useLocation();
@@ -16,6 +26,7 @@ const Header = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const { toast } = useToast();
+  const { user, logoutMutation } = useAuth();
 
   // Handle scroll effect
   useEffect(() => {
@@ -114,17 +125,46 @@ const Header = () => {
               <Search className="h-5 w-5" />
             </Button>
             
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="text-white p-2 rounded-full hover:bg-prime-dark-light"
-              onClick={() => toast({
-                title: "User Menu",
-                description: "User authentication not implemented in this demo",
-              })}
-            >
-              <User className="h-5 w-5" />
-            </Button>
+            {user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="text-white p-2 rounded-full hover:bg-prime-dark-light"
+                  >
+                    <User className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 bg-prime-dark border-prime-dark-light">
+                  <DropdownMenuLabel className="text-white">My Account</DropdownMenuLabel>
+                  <DropdownMenuSeparator className="bg-prime-dark-light" />
+                  <DropdownMenuItem className="text-white focus:bg-prime-dark-light cursor-pointer">
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Profile</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => {
+                      logoutMutation.mutate();
+                      setLocation('/auth');
+                    }}
+                    className="text-white focus:bg-prime-dark-light cursor-pointer"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Log out</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="text-white p-2 rounded-full hover:bg-prime-dark-light"
+                onClick={() => setLocation('/auth')}
+              >
+                <User className="h-5 w-5" />
+              </Button>
+            )}
             
             <Button 
               variant="ghost" 
@@ -185,6 +225,28 @@ const Header = () => {
                   Admin Panel
                 </a>
               </Link>
+              {!user && (
+                <Link href="/auth">
+                  <a 
+                    className={`transition ${location === '/auth' ? 'text-white' : 'text-prime-gray'}`}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Sign In
+                  </a>
+                </Link>
+              )}
+              {user && (
+                <a
+                  className="text-prime-gray cursor-pointer"
+                  onClick={() => {
+                    logoutMutation.mutate();
+                    setLocation('/auth');
+                    setIsMobileMenuOpen(false);
+                  }}
+                >
+                  Log Out
+                </a>
+              )}
             </nav>
           </div>
         )}

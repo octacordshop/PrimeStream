@@ -16,7 +16,7 @@ if (!connectionString) {
 
 // Use the recommended method for Neon Serverless
 const sql = neon(connectionString);
-const pool = new Pool({ connectionString });
+export const pool = new Pool({ connectionString });
 
 // Create the Drizzle client
 export const db = drizzle(pool, { schema });

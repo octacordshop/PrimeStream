@@ -254,7 +254,7 @@ const TVShowPage = () => {
                   </SelectTrigger>
                   <SelectContent className="bg-prime-dark text-white border border-white/20">
                     {Array.from({ length: tvShow.seasons }, (_, i) => (
-                      <SelectItem key={i + 1} value={(i + 1).toString()}>
+                      <SelectItem key={i + 1} value={(i + 1).toString()} className="cursor-pointer">
                         Season {i + 1}
                       </SelectItem>
                     ))}
