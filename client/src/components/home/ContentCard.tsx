@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Plus, Check, Play } from "lucide-react";
 import { useWatchlist } from "@/context/WatchlistContext";
 import { useToast } from "@/hooks/use-toast";
-import VideoPlayer from "@/components/common/VideoPlayer";
 
 interface ContentCardProps {
   id: number;
@@ -27,24 +26,33 @@ const ContentCard = ({
   imdbId
 }: ContentCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
-  const [showPlayer, setShowPlayer] = useState(false);
-  const { addToWatchlist, removeFromWatchlist, isItemInWatchlist } = useWatchlist();
-  const isInWatchlist = isItemInWatchlist(contentType, id);
+  const [_, setLocation] = useLocation();
+  const watchlistContext = useWatchlist();
+  const isInWatchlist = watchlistContext?.isItemInWatchlist?.(contentType, id) || false;
   const { toast } = useToast();
 
   const handleWatchlistClick = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
+    if (!watchlistContext) {
+      toast({
+        title: "Error",
+        description: "Watchlist is not available. Try logging in again.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       if (isInWatchlist) {
-        await removeFromWatchlist(contentType, id);
+        await watchlistContext.removeFromWatchlist(contentType, id);
         toast({
           title: "Removed from watchlist",
           description: `${title} has been removed from your list`,
         });
       } else {
-        await addToWatchlist({
+        await watchlistContext.addToWatchlist({
           mediaType: contentType,
           mediaId: id
         });
@@ -65,7 +73,8 @@ const ContentCard = ({
   const handlePlayClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setShowPlayer(true);
+    // Navigate to the watch page instead of showing an inline player
+    setLocation(`/watch/${contentType}/${id}`);
   };
 
   return (
@@ -140,15 +149,6 @@ const ContentCard = ({
           )}
         </button>
       </div>
-      
-      {showPlayer && (
-        <VideoPlayer 
-          contentType={contentType} 
-          imdbId={imdbId}
-          title={title}
-          onClose={() => setShowPlayer(false)} 
-        />
-      )}
     </>
   );
 };

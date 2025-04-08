@@ -8,8 +8,11 @@ import { Plus } from 'lucide-react';
 import { Link } from 'wouter';
 
 const HomePage = () => {
-  const { watchlist } = useWatchlist();
-  const { recentlyWatched } = useRecentlyWatched();
+  const watchlistContext = useWatchlist();
+  const recentlyWatchedContext = useRecentlyWatched();
+  
+  const watchlist = watchlistContext?.watchlist || [];
+  const recentlyWatched = recentlyWatchedContext?.recentlyWatched || [];
   
   return (
     <div className="flex flex-col">
