@@ -66,7 +66,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get latest movies with optional genre filter
   app.get("/api/movies/latest", async (req, res) => {
     try {
-      const limit = parseInt(req.query.limit as string) || 20;
+      const limit = parseInt(req.query.limit as string) || 1000; // Increased limit to show more movies
       const offset = parseInt(req.query.offset as string) || 0;
       const genre = req.query.genre as string;
       
@@ -129,7 +129,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get latest TV shows with optional genre filter
   app.get("/api/tvshows/latest", async (req, res) => {
     try {
-      const limit = parseInt(req.query.limit as string) || 20;
+      const limit = parseInt(req.query.limit as string) || 1000; // Increased limit to show more TV shows
       const offset = parseInt(req.query.offset as string) || 0;
       const genre = req.query.genre as string;
       
@@ -235,7 +235,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Search query must be at least 2 characters" });
       }
       
-      const limit = parseInt(req.query.limit as string) || 20;
+      const limit = parseInt(req.query.limit as string) || 100; // Increased limit for search results
       const results = await storage.searchContent(query, limit);
       res.json(results);
     } catch (error) {
@@ -246,10 +246,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // --- User Interactions ---
 
-  // Get user's watchlist (temporary userId for demo)
+  // Get user's watchlist
   app.get("/api/watchlist", async (req, res) => {
     try {
-      const userId = 1; // In a real app, get from session
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const userId = req.user.id;
       const watchlist = await storage.getWatchlist(userId);
       
       // Fetch the actual content items for each watchlist entry
@@ -279,7 +282,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add item to watchlist
   app.post("/api/watchlist", async (req, res) => {
     try {
-      const userId = 1; // In a real app, get from session
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const userId = req.user.id;
       const validatedData = insertWatchlistSchema.parse({
         ...req.body,
         userId
@@ -330,7 +336,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user's recently watched
   app.get("/api/recently-watched", async (req, res) => {
     try {
-      const userId = 1; // In a real app, get from session
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const userId = req.user.id;
       const limit = parseInt(req.query.limit as string) || 20;
       const recentlyWatched = await storage.getRecentlyWatched(userId, limit);
       
@@ -367,7 +376,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add item to recently watched
   app.post("/api/recently-watched", async (req, res) => {
     try {
-      const userId = 1; // In a real app, get from session
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
+      const userId = req.user.id;
       const validatedData = insertRecentlyWatchedSchema.parse({
         ...req.body,
         userId
@@ -387,6 +399,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update progress of recently watched item
   app.patch("/api/recently-watched/:id", async (req, res) => {
     try {
+      if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "Authentication required" });
+      }
       const id = parseInt(req.params.id);
       if (isNaN(id)) {
         return res.status(400).json({ message: "Invalid recently watched item ID" });
