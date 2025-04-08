@@ -1,0 +1,80 @@
+To address the cross-origin issue and properly integrate Vidsrc with your website, I’ll explain how the Vidsrc API works and how to work around common CORS (Cross-Origin Resource Sharing) restrictions that typically cause problems with embedding. Here’s a breakdown of what you need to know:
+
+Vidsrc API for Video Playback
+Vidsrc provides several API endpoints for video playback, which allow you to embed movie or TV show content from external sources like IMDB or TMDB. Below are the key endpoints:
+
+Movie Embed URL:
+
+Endpoint: https://vidsrc.xyz/embed/movie
+
+Parameters:
+
+imdb or tmdb required (IMDB or TMDB ID of the movie).
+
+sub_url optional (URL-encoded .srt or .vtt file for subtitles).
+
+ds_lang optional (default subtitle language, ISO639 Language Code).
+
+Example:
+https://vidsrc.xyz/embed/movie?imdb=tt5433140&ds_lang=en
+
+TV Show Embed URL:
+
+Endpoint: https://vidsrc.xyz/embed/tv
+
+Parameters:
+
+imdb or tmdb required (IMDB or TMDB ID of the TV show).
+
+ds_lang optional (default subtitle language, ISO639 Language Code).
+
+Example:
+https://vidsrc.xyz/embed/tv?imdb=tt0944947&ds_lang=en
+
+Episode Embed URL:
+
+Endpoint: https://vidsrc.xyz/embed/tv
+
+Parameters:
+
+imdb or tmdb required (IMDB or TMDB ID of the TV show).
+
+season required (season number).
+
+episode required (episode number).
+
+sub_url optional (URL-encoded .srt or .vtt file).
+
+ds_lang optional (default subtitle language).
+
+Example:
+https://vidsrc.xyz/embed/tv?imdb=tt0944947&season=1&episode=1&ds_lang=en
+
+Latest Movies:
+
+Endpoint: https://vidsrc.xyz/movies/latest/page-PAGE_NUMBER.json
+
+Use this to list the latest movies. Replace PAGE_NUMBER with the actual page number to fetch movie lists dynamically.
+
+Latest TV Shows:
+
+Endpoint: https://vidsrc.xyz/tvshows/latest/page-PAGE_NUMBER.json
+
+Similar to the movies endpoint but for TV shows.
+
+Latest Episodes:
+
+Endpoint: https://vidsrc.xyz/episodes/latest/page-PAGE_NUMBER.json
+
+List the latest episodes.
+
+Authentication and API Keys
+As of now, the Vidsrc API does not require any authentication like API keys or tokens for embedding movies or fetching movie data. This means you can freely use their endpoints without needing to authenticate, which simplifies integration.
+
+CORS and Cross-Origin Restrictions
+Cross-origin issues typically arise when you try to embed an iframe or make AJAX requests to a domain that doesn't support CORS headers, which are required for browser security to allow resources (e.g., images, scripts, iframes) to be loaded from another origin.
+
+In the case of Vidsrc, when you try to embed their iframe directly, you might encounter CORS errors, as the embedded player might be trying to access resources from a different domain.
+
+How to Fix the Cross-Origin Issue:
+Using Vidsrc Embed URLs Properly: Vidsrc’s embedding system, by default, should work without causing a CORS error if you simply use their iframe embed code. The direct embed URL (e.g., https://vidsrc.xyz/embed/movie?imdb=tt5433140) can be used inside an iframe element like this:
